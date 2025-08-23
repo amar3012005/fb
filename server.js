@@ -10,6 +10,60 @@ const twilio = require('twilio');
 const WebSocket = require('ws');
 const fs = require('fs');
 
+// Restaurant data for vendor contact lookup
+const restaurants = [
+  {
+    id: 1,
+    name: "Alpha Restaurant",
+    vendorEmail: "alpha.restaurant@gmail.com",
+    vendorPhone: "+91 98765 43210",
+    operatingHours: "11:00 AM - 11:00 PM",
+    category: "Multi-Cuisine"
+  },
+  {
+    id: 2,
+    name: "Beta Cafe",
+    vendorEmail: "beta.cafe@gmail.com", 
+    vendorPhone: "+91 87654 32109",
+    operatingHours: "8:00 AM - 10:00 PM",
+    category: "Coffee & Snacks"
+  },
+  {
+    id: 3,
+    name: "Gamma Grill",
+    vendorEmail: "gamma.grill@gmail.com",
+    vendorPhone: "+91 76543 21098", 
+    operatingHours: "12:00 PM - 12:00 AM",
+    category: "Grilled Specialties"
+  },
+  {
+    id: 4,
+    name: "Delta Diner",
+    vendorEmail: "delta.diner@gmail.com",
+    vendorPhone: "+91 65432 10987",
+    operatingHours: "7:00 AM - 11:00 PM", 
+    category: "American Diner"
+  },
+  {
+    id: 5,
+    name: "Pi Restaurant",
+    vendorEmail: "pi.restaurant@gmail.com",
+    vendorPhone: "+91 54321 09876",
+    operatingHours: "10:00 AM - 10:00 PM",
+    category: "Italian Cuisine"
+  }
+];
+
+// Function to get restaurant data by ID
+const getRestaurantById = (restaurantId) => {
+  const id = parseInt(restaurantId);
+  return restaurants.find(restaurant => restaurant.id === id) || {
+    name: "Restaurant",
+    vendorEmail: "suppfoodles@gmail.com", 
+    vendorPhone: "+91 98765 43210"
+  };
+};
+
 // Only watch .env file in development mode
 if (process.env.NODE_ENV === 'development') {
   const envPath = path.join(__dirname, '.env');
@@ -1156,8 +1210,16 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
       customerPhone: '+919999999999',
       vendorPhone: vendorPhone || '+919999999999'
     };
-    const safeVendorEmail = vendorEmail || 'admin@foodles.shop';
-    const safeVendorPhone = vendorPhone || '+919999999999';
+    // Get vendor contact info dynamically from restaurant data
+    const restaurantData = getRestaurantById(restaurantId);
+    const safeVendorEmail = vendorEmail || restaurantData.vendorEmail;
+    const safeVendorPhone = vendorPhone || restaurantData.vendorPhone;
+
+    console.log(`🏪 Restaurant ${restaurantId} - Using vendor contact:`, {
+      name: restaurantData.name,
+      email: safeVendorEmail,
+      phone: safeVendorPhone
+    });
 
     // SEND CUSTOMER EMAIL - Guaranteed attempt
     try {
@@ -1179,7 +1241,7 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
           convenienceFee: 0,
           dogDonation: 0
         };
-        await sendOrderConfirmationEmail(safeName, 'suppfoodles@gmail.com', fallbackOrderDetails, orderId, isPreReservation);
+        await sendOrderConfirmationEmail(safeName, safeVendorEmail, fallbackOrderDetails, orderId, isPreReservation);
         emailsSent++;
         console.log(`📧 Customer fallback email sent to admin`);
       } catch (retryError) {
@@ -1228,7 +1290,7 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
         // RETRY vendor email to admin as fallback
         try {
           console.log(`🔄 Sending vendor notification to admin as fallback`);
-          await sendOrderReceivedEmail('suppfoodles@gmail.com', safeOrderDetails, orderId);
+          await sendOrderReceivedEmail(safeVendorEmail, safeOrderDetails, orderId);
           emailsSent++;
           console.log(`📧 Vendor fallback email sent to admin`);
         } catch (retryError) {
@@ -1278,7 +1340,7 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
     // EMERGENCY FALLBACK - Send at least one notification
     try {
       console.log(`🆘 Emergency fallback notification for ${orderId}`);
-      await sendAdminNotificationEmail('Emergency Order', 'suppfoodles@gmail.com', { 
+      await sendAdminNotificationEmail('Emergency Order', safeVendorEmail, { 
         items: [{ name: 'Emergency Processing', quantity: 1, price: 0 }],
         grandTotal: 0,
         deliveryAddress: 'Emergency processing - check logs',
@@ -1640,7 +1702,9 @@ app.get('/api/payment-form/:amount', (req, res) => {
     
     let formUrl;
     
-    if (amount <= 25) {
+    if (amount <= 20) {
+      formUrl = process.env.CASHFREE_FORM_20;
+    } else if (amount <= 25) {
       formUrl = process.env.CASHFREE_FORM_25;
     } else if (amount <= 45) {
       formUrl = process.env.CASHFREE_FORM_45;

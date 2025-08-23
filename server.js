@@ -106,7 +106,7 @@ app.get('/razorpay-key', (req, res) => {
   res.json({ key: process.env.RAZORPAY_KEY_ID });
 });
 
-const formatOrderDetails = (orderDetails, orderId) => {
+const formatOrderDetails = (orderDetails, orderId, isPreReservation = false) => {
   // Format phone numbers consistently
   const formatPhoneForDisplay = (phone) => {
     if (!phone) return 'Not provided';
@@ -123,16 +123,41 @@ const formatOrderDetails = (orderDetails, orderId) => {
   const customerPhoneLink = orderDetails.customerPhone ? 
     formatPhoneNumber(orderDetails.customerPhone) : '';
 
+  // Choose color scheme based on order type
+  const colorScheme = isPreReservation ? {
+    primary: '#9333EA',      // Purple-600
+    secondary: '#C084FC',    // Purple-400
+    accent: '#DDD6FE',       // Purple-200
+    dark: '#581C87',         // Purple-900
+    light: '#F3E8FF'         // Purple-50
+  } : {
+    primary: '#FFD700',      // Gold (current)
+    secondary: '#4ADE80',    // Green-400
+    accent: '#888888',       // Gray
+    dark: '#111111',         // Dark gray
+    light: '#1A1A1A'         // Light dark
+  };
+
+  const orderTypeLabel = isPreReservation ? 'PRE-RESERVATION CONFIRMED' : 'ORDER CONFIRMED';
+  const orderTypePrefix = isPreReservation ? 'PRE-RES' : '';
+
   const userEmailTemplate = `
   <div style="background-color: #000000; color: #ffffff; font-family: 'Arial', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background-color: #111111; border-left: 4px solid #FFD700; padding: 20px; margin-bottom: 20px;">
-      <h1 style="color: #FFD700; margin: 0; font-size: 24px;">ORDER CONFIRMED</h1>
-      <p style="color: #888888; margin: 5px 0;">Order ID: #${orderId}</p>
+    <div style="background-color: #111111; border-left: 4px solid ${colorScheme.primary}; padding: 20px; margin-bottom: 20px;">
+      <h1 style="color: ${colorScheme.primary}; margin: 0; font-size: 24px;">${orderTypeLabel}</h1>
+      <p style="color: #888888; margin: 5px 0;">Order ID: #${orderTypePrefix}${orderId}</p>
+      ${isPreReservation ? `
+        <div style="background-color: ${colorScheme.primary}20; border: 1px solid ${colorScheme.primary}; padding: 10px; margin-top: 10px; border-radius: 4px;">
+          <p style="color: ${colorScheme.secondary}; margin: 0; font-size: 14px;">
+            🎉 Table Pre-Reserved | ✨ 10% Discount Applied | 💰 Pay only ₹20 now
+          </p>
+        </div>
+      ` : ''}
     </div>
 
     <div style="background-color: #111111; padding: 20px; margin-bottom: 20px;">
       <div style="border-bottom: 1px solid #333333; padding-bottom: 10px; margin-bottom: 15px;">
-        <h2 style="color: #FFD700; font-size: 18px; margin: 0;">ORDER DETAILS</h2>
+        <h2 style="color: ${colorScheme.primary}; font-size: 18px; margin: 0;">ORDER DETAILS</h2>
       </div>
       
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -178,16 +203,16 @@ const formatOrderDetails = (orderDetails, orderId) => {
       </table>
 
       <div style="margin-top: 20px; border-top: 1px solid #333333; padding-top: 15px;">
-        <h3 style="color: #FFD700; font-size: 16px; margin-bottom: 10px;">PAYMENT DETAILS</h3>
+        <h3 style="color: ${colorScheme.primary}; font-size: 16px; margin-bottom: 10px;">PAYMENT DETAILS</h3>
         <table style="width: 100%; border-collapse: collapse;">
           <tr style="background-color: #1A1A1A;">
-            <td style="padding: 10px 5px; color: #4ADE80;">Order-Confirmation Amount (paid)</td>
-            <td style="text-align: right; padding: 10px 5px; color: #4ADE80;">
+            <td style="padding: 10px 5px; color: ${colorScheme.secondary};">Order-Confirmation Amount (paid)</td>
+            <td style="text-align: right; padding: 10px 5px; color: ${colorScheme.secondary};">
               ₹${prePaidAmount.toFixed(2)}
             </td>
           </tr>
-          <tr style="background-color: #FFD700;">
-            <td style="padding: 10px 5px; color: #000000;">Pay on Delivery</td>
+          <tr style="background-color: ${isPreReservation ? colorScheme.primary : '#FFD700'};">
+            <td style="padding: 10px 5px; color: #000000;">${isPreReservation ? 'Pay at Restaurant' : 'Pay on Delivery'}</td>
             <td style="text-align: right; padding: 10px 5px; color: #000000;">
               ₹${remainingAmount.toFixed(2)}
             </td>
@@ -196,14 +221,14 @@ const formatOrderDetails = (orderDetails, orderId) => {
       </div>
 
       <div style="background-color: #1A1A1A; padding: 15px; margin-bottom: 20px;">
-        <h3 style="color: #FFD700; margin: 0 0 10px 0; font-size: 16px;">DELIVERY LOCATION</h3>
+        <h3 style="color: ${colorScheme.primary}; margin: 0 0 10px 0; font-size: 16px;">${isPreReservation ? 'RESTAURANT LOCATION' : 'DELIVERY LOCATION'}</h3>
         <p style="margin: 0; color: #ffffff;">${orderDetails.deliveryAddress}</p>
       </div>
 
       <div style="background-color: #1A1A1A; padding: 15px;">
-        <h3 style="color: #FFD700; margin: 0 0 10px 0; font-size: 16px;">VENDOR CONTACT</h3>
+        <h3 style="color: ${colorScheme.primary}; margin: 0 0 10px 0; font-size: 16px;">VENDOR CONTACT</h3>
         <p style="margin: 0; color: #ffffff;">
-          Mobile: <a href="tel:${vendorPhoneLink}" style="color: #4ADE80; text-decoration: none; border-bottom: 1px dashed #4ADE80;">
+          Mobile: <a href="tel:${vendorPhoneLink}" style="color: ${colorScheme.secondary}; text-decoration: none; border-bottom: 1px dashed ${colorScheme.secondary};">
             ${formatPhoneForDisplay(orderDetails.vendorPhone)}
           </a>
         </p>
@@ -211,11 +236,11 @@ const formatOrderDetails = (orderDetails, orderId) => {
     </div>
 
     <div style="text-align: center; padding: 20px; background-color: #111111;">
-      <p style="color: #888888; margin: 0;">Thank you for ordering with Foodles</p>
+      <p style="color: #888888; margin: 0;">Thank you for ${isPreReservation ? 'your pre-reservation with' : 'ordering with'} Foodles</p>
       
       ${orderDetails.dogDonation > 0 ? `
-        <div style="margin-top: 15px; padding: 15px; border: 1px solid #4ADE80; border-radius: 4px; background: rgba(74, 222, 128, 0.1);">
-          <p style="color: #4ADE80; margin: 0; font-size: 14px;">
+        <div style="margin-top: 15px; padding: 15px; border: 1px solid ${colorScheme.secondary}; border-radius: 4px; background: rgba(${isPreReservation ? '147, 51, 234' : '74, 222, 128'}, 0.1);">
+          <p style="color: ${colorScheme.secondary}; margin: 0; font-size: 14px;">
             🐾 You're amazing! Thank you for your kind donation of ₹${orderDetails.dogDonation.toFixed(2)} towards our campus dogs!
             <span style="display: block; margin-top: 5px; font-size: 12px; opacity: 0.8;">
               Your generosity helps us provide better care for our furry friends. We'll keep you updated on how your contribution makes a difference.
@@ -226,10 +251,10 @@ const formatOrderDetails = (orderDetails, orderId) => {
       
       <!-- Share Your Thoughts Button -->
       <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #333;">
-        <p style="color: #FFD700; font-size: 14px; margin-bottom: 15px;">Your feedback helps us improve!</p>
+        <p style="color: ${colorScheme.primary}; font-size: 14px; margin-bottom: 15px;">Your feedback helps us improve!</p>
         <a href="https://docs.google.com/forms/d/e/1FAIpQLScXZaSqfIz6wFzA_-KtJ5bxM65E_wfJArZyMb_NOYNoaT1I5w/viewform?usp=sharing" 
            style="display: inline-block;
-                  background: #FFD700;
+                  background: ${colorScheme.primary};
                   color: #000000;
                   padding: 12px 24px;
                   text-decoration: none;
@@ -246,9 +271,16 @@ const formatOrderDetails = (orderDetails, orderId) => {
 
   const vendorEmailTemplate = `
   <div style="background-color: #000000; color: #ffffff; font-family: 'Arial', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background-color: #111111; border-left: 4px solid #FFD700; padding: 20px; margin-bottom: 20px;">
-      <h1 style="color: #FFD700; margin: 0; font-size: 24px;">NEW ORDER_${orderId} RECEIVED</h1>
-      <p style="color: #888888; margin: 5px 0;">Order ID: #${orderId}</p>
+    <div style="background-color: #111111; border-left: 4px solid ${colorScheme.primary}; padding: 20px; margin-bottom: 20px;">
+      <h1 style="color: ${colorScheme.primary}; margin: 0; font-size: 24px;">${isPreReservation ? 'NEW PRE-RESERVATION' : 'NEW ORDER'}_${orderId} RECEIVED</h1>
+      <p style="color: #888888; margin: 5px 0;">Order ID: #${orderTypePrefix}${orderId}</p>
+      ${isPreReservation ? `
+        <div style="background-color: ${colorScheme.primary}20; border: 1px solid ${colorScheme.primary}; padding: 10px; margin-top: 10px; border-radius: 4px;">
+          <p style="color: ${colorScheme.secondary}; margin: 0; font-size: 14px;">
+            🍽️ Table Pre-Reserved | Customer will dine-in | Only ₹20 collected online
+          </p>
+        </div>
+      ` : ''}
     </div>
 
     <div style="background-color: #111111; padding: 20px; margin-bottom: 20px;">
@@ -264,7 +296,7 @@ const formatOrderDetails = (orderDetails, orderId) => {
             <td style="text-align: center; padding: 10px 5px;">${item.quantity}</td>
           </tr>
         `).join('')}
-        <tr style="background-color:rgb(250, 231, 124);">
+        <tr style="background-color:${isPreReservation ? colorScheme.primary : 'rgb(250, 231, 124)'};">
           <td colspan="2" style="padding: 10px 5px; color:black ; font-weight: bold;">Total Amount</td>
           <td style="text-align: right; padding: 10px 5px; color: black; font-weight: bold;">₹${remainingAmount.toFixed(2)}</td>
         </tr>
@@ -273,14 +305,14 @@ const formatOrderDetails = (orderDetails, orderId) => {
 
 
       <div style="background-color: #1A1A1A; padding: 15px; margin-bottom: 20px;">
-        <h3 style="color: #FFD700; margin: 0 0 10px 0; font-size: 16px;">DELIVERY LOCATION</h3>
+        <h3 style="color: ${colorScheme.primary}; margin: 0 0 10px 0; font-size: 16px;">${isPreReservation ? 'RESTAURANT LOCATION' : 'DELIVERY LOCATION'}</h3>
         <p style="margin: 0; color: #ffffff;">${orderDetails.deliveryAddress}</p>
       </div>
 
       <div style="background-color: #1A1A1A; padding: 15px;">
-        <h3 style="color: #FFD700; margin: 0 0 10px 0; font-size: 16px;">CUSTOMER CONTACT</h3>
+        <h3 style="color: ${colorScheme.primary}; margin: 0 0 10px 0; font-size: 16px;">CUSTOMER CONTACT</h3>
         <p style="margin: 0; color: #ffffff;">
-          Mobile: <a href="tel:${customerPhoneLink}" style="color: #4ADE80; text-decoration: none; border-bottom: 1px dashed #4ADE80;">
+          Mobile: <a href="tel:${customerPhoneLink}" style="color: ${colorScheme.secondary}; text-decoration: none; border-bottom: 1px dashed ${colorScheme.secondary};">
             ${formatPhoneForDisplay(orderDetails.customerPhone)}
           </a>
         </p>
@@ -288,7 +320,7 @@ const formatOrderDetails = (orderDetails, orderId) => {
     </div>
 
     <div style="text-align: center; padding: 20px; background-color: #111111;">
-      <p style="color: #888888; margin: 0;">Please prepare the order for delivery</p>
+      <p style="color: #888888; margin: 0;">Please prepare the order for ${isPreReservation ? 'dine-in service' : 'delivery'}</p>
     </div>
   </div>
   `;
@@ -301,22 +333,30 @@ const isValidEmail = (email) => {
   return emailRegex.test(email);
 };
 
-const sendOrderConfirmationEmail = (name, email, orderDetails, orderId) => {
+const sendOrderConfirmationEmail = (name, email, orderDetails, orderId, isPreReservation = false) => {
   return new Promise((resolve, reject) => {
     if (!isValidEmail(email)) {
       reject(new Error("Invalid customer email address"));
       return;
     }
 
-    const { userEmailTemplate } = formatOrderDetails(orderDetails, orderId);
+    // Detect pre-reservation from orderDetails if not explicitly passed
+    const preReservationDetected = isPreReservation || 
+      orderDetails.isPreReservation || 
+      orderDetails.preReservationData || 
+      orderDetails.orderType === 'pre-reserve' ||
+      (orderDetails.remainingPayment && orderDetails.remainingPayment <= 20);
 
+    const { userEmailTemplate } = formatOrderDetails(orderDetails, orderId, preReservationDetected);
+
+    const orderTypeText = preReservationDetected ? 'Pre-Reservation' : 'Order';
     const mail = {
       from: {
         name: 'Foodles Orders',
         address: process.env.EMAIL_USER
       },
       to: email,
-      subject: `Order Confirmed: #${orderId} - Foodles`,
+      subject: `${orderTypeText} Confirmed: #${preReservationDetected ? 'PRE-RES' : ''}${orderId} - Foodles`,
       html: userEmailTemplate,
       headers: {
         'X-Entity-Ref-ID': `order-${orderId}`,
@@ -356,22 +396,30 @@ const sendOrderConfirmationEmail = (name, email, orderDetails, orderId) => {
   });
 };
 
-const sendOrderReceivedEmail = (vendorEmail, orderDetails, orderId) => {
+const sendOrderReceivedEmail = (vendorEmail, orderDetails, orderId, isPreReservation = false) => {
   return new Promise((resolve, reject) => {
     if (!isValidEmail(vendorEmail)) {
       reject(new Error("Invalid vendor email address"));
       return;
     }
 
-    const { vendorEmailTemplate } = formatOrderDetails(orderDetails, orderId);
+    // Detect pre-reservation from orderDetails if not explicitly passed
+    const preReservationDetected = isPreReservation || 
+      orderDetails.isPreReservation || 
+      orderDetails.preReservationData || 
+      orderDetails.orderType === 'pre-reserve' ||
+      (orderDetails.remainingPayment && orderDetails.remainingPayment <= 20);
 
+    const { vendorEmailTemplate } = formatOrderDetails(orderDetails, orderId, preReservationDetected);
+
+    const orderTypeText = preReservationDetected ? 'Pre-Reservation' : 'Order';
     const mail = {
       from: {
         name: 'Foodles Vendor Orders',
         address: process.env.EMAIL_USER
       },
       to: vendorEmail,
-      subject: `New Order: #${orderId} - Action Required`,
+      subject: `New ${orderTypeText}: #${preReservationDetected ? 'PRE-RES' : ''}${orderId} - Action Required`,
       html: vendorEmailTemplate,
       headers: {
         'X-Entity-Ref-ID': `vendor-order-${orderId}`,
@@ -1090,6 +1138,14 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
     global.emailStatus = global.emailStatus || {};
     global.emailStatus[orderId] = { emailsSent: 0, emailErrors: [], missedCallStatus: null };
 
+    // Detect pre-reservation from orderDetails
+    const isPreReservation = orderDetails.isPreReservation || 
+      orderDetails.preReservationData || 
+      orderDetails.orderType === 'pre-reserve' ||
+      (orderDetails.remainingPayment && orderDetails.remainingPayment <= 20);
+
+    console.log(`📧 Order type detected: ${isPreReservation ? 'PRE-RESERVATION' : 'REGULAR ORDER'}`);
+
     // Ensure we have minimum required data
     const safeName = name || 'Valued Customer';
     const safeEmail = email || 'customer@foodles.shop';
@@ -1105,7 +1161,7 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
 
     // SEND CUSTOMER EMAIL - Guaranteed attempt
     try {
-      await sendOrderConfirmationEmail(safeName, safeEmail, safeOrderDetails, orderId);
+      await sendOrderConfirmationEmail(safeName, safeEmail, safeOrderDetails, orderId, isPreReservation);
       emailsSent++;
       console.log(`📧 Customer email sent successfully to ${safeEmail}`);
     } catch (error) {
@@ -1123,7 +1179,7 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
           convenienceFee: 0,
           dogDonation: 0
         };
-        await sendOrderConfirmationEmail(safeName, 'suppfoodles@gmail.com', fallbackOrderDetails, orderId);
+        await sendOrderConfirmationEmail(safeName, 'suppfoodles@gmail.com', fallbackOrderDetails, orderId, isPreReservation);
         emailsSent++;
         console.log(`📧 Customer fallback email sent to admin`);
       } catch (retryError) {
@@ -1134,7 +1190,7 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
     // SEND VENDOR EMAIL + MISSED CALL - Guaranteed attempt
     if (safeVendorEmail) {
       try {
-        await sendOrderReceivedEmail(safeVendorEmail, safeOrderDetails, orderId);
+        await sendOrderReceivedEmail(safeVendorEmail, safeOrderDetails, orderId, isPreReservation);
         emailsSent++;
         console.log(`📧 Vendor email sent successfully to ${safeVendorEmail}`);
         
@@ -1573,6 +1629,46 @@ app.post('/api/submit-feedback', async (req, res) => {
   } catch (error) {
     console.error('❌ Feedback submission failed:', error.message);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get appropriate payment form URL based on amount
+app.get('/api/payment-form/:amount', (req, res) => {
+  try {
+    const amount = parseInt(req.params.amount);
+    console.log(`💳 Getting payment form for amount: ₹${amount}`);
+    
+    let formUrl;
+    
+    if (amount <= 25) {
+      formUrl = process.env.CASHFREE_FORM_25;
+    } else if (amount <= 45) {
+      formUrl = process.env.CASHFREE_FORM_45;
+    } else {
+      formUrl = process.env.CASHFREE_FORM_55;
+    }
+    
+    if (!formUrl) {
+      console.error('❌ Payment form URL not configured for amount:', amount);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Payment form not configured' 
+      });
+    }
+    
+    console.log(`✅ Payment form selected: ${formUrl}`);
+    res.json({ 
+      success: true, 
+      paymentFormUrl: formUrl,
+      amount: amount 
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting payment form URL:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
   }
 });
 

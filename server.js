@@ -695,12 +695,7 @@ app.post('/payment/prepare-order', async (req, res) => {
       amount 
     } = req.body;
 
-    console.log('Preparing order for Cashfree payment:', {
-      orderId,
-      amount,
-      restaurantId,
-      restaurantName
-    });
+    console.log(`📦 Preparing order ${orderId} for ${restaurantName} - Customer: ${userDetails.fullName}`);
 
     // Store order data temporarily (expires in 1 hour)
     pendingOrders.set(orderId, {
@@ -718,6 +713,8 @@ app.post('/payment/prepare-order', async (req, res) => {
     setTimeout(() => {
       pendingOrders.delete(orderId);
     }, 3600000); // 1 hour
+
+    console.log(`✅ Order ${orderId} prepared for payment`);
 
     res.json({ 
       success: true, 
@@ -738,12 +735,10 @@ app.post('/payment/cashfree-success', async (req, res) => {
   try {
     const { orderId, paymentSuccess } = req.body;
 
-    console.log('Processing Cashfree payment success:', {
-      orderId,
-      paymentSuccess
-    });
+    console.log(`💳 Payment completed for order: ${orderId}`);
 
     if (!paymentSuccess) {
+      console.log(`❌ Payment failed for order: ${orderId}`);
       return res.status(400).json({
         success: false,
         error: 'Payment not successful'
@@ -753,6 +748,7 @@ app.post('/payment/cashfree-success', async (req, res) => {
     // Retrieve stored order data
     const orderData = pendingOrders.get(orderId);
     if (!orderData) {
+      console.log(`❌ Order data not found: ${orderId}`);
       return res.status(404).json({
         success: false,
         error: 'Order data not found'
@@ -768,6 +764,8 @@ app.post('/payment/cashfree-success', async (req, res) => {
       restaurantName 
     } = orderData;
 
+    console.log(`📧 Processing notifications for: ${userDetails.fullName} at ${restaurantName}`);
+
     // Process the order (send emails and notifications)
     let modifiedOrderDetails = JSON.stringify(orderDetails);
     
@@ -778,6 +776,7 @@ app.post('/payment/cashfree-success', async (req, res) => {
       parsedDetails.remainingPayment = 20 + adjustedDonation;
       parsedDetails.convenienceFee = 0;
       modifiedOrderDetails = JSON.stringify(parsedDetails);
+      console.log(`🍕 Applied Pizza Bite pricing adjustment`);
     }
 
     const results = await processEmails(
@@ -800,6 +799,8 @@ app.post('/payment/cashfree-success', async (req, res) => {
 
     // Clean up the pending order
     pendingOrders.delete(orderId);
+
+    console.log(`✅ Order ${orderId} completed - Emails: ${results.emailsSent}, Call: ${results.missedCallStatus}`);
 
     res.json({
       success: true,
@@ -1340,11 +1341,7 @@ app.get('/api/restaurants/status', (req, res) => {
 app.post('/api/log-restaurant-selection', (req, res) => {
   const { restaurantId, restaurantName, timestamp } = req.body;
   
-  console.log('\n🏪 Restaurant Selected:', {
-    restaurantId,
-    restaurantName,
-    timestamp
-  });
+  console.log(`🏪 Restaurant selected: ${restaurantName} (ID: ${restaurantId})`);
 
   res.json({ success: true });
 });
@@ -1433,13 +1430,13 @@ wss.on('connection', (ws) => {
 // Add a new endpoint to handle feedback submissions
 app.post('/api/submit-feedback', async (req, res) => {
   const { orderId, feedback } = req.body;
-  console.log('📝 Feedback received:', { orderId, feedback });
+  console.log(`📝 Feedback for order ${orderId}: ${feedback.rating}/5 stars`);
   
   try {
     // You can add logic here to store feedback in a database
     res.json({ success: true });
   } catch (error) {
-    console.error('Feedback submission failed:', error);
+    console.error('❌ Feedback submission failed:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });

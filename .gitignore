@@ -1,0 +1,9 @@
+node_modules
+.vercel
+.env
+.env.local
+.env.production
+.env.staging
+*.log
+dist/
+build/

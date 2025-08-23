@@ -679,6 +679,7 @@ app.get('/order-details/:orderId', async (req, res) => {
 // Cashfree Payment Endpoints
 // Store order data temporarily for processing after payment
 const pendingOrders = new Map();
+const processedOrders = new Map(); // Track completed orders
 
 // Endpoint to prepare order data before redirecting to Cashfree
 app.post('/payment/prepare-order', async (req, res) => {
@@ -789,6 +790,14 @@ app.post('/payment/cashfree-success', async (req, res) => {
       restaurantId
     );
 
+    // Store the completed order in processedOrders for future reference
+    processedOrders.set(orderId, {
+      ...orderData,
+      orderDetails: JSON.parse(modifiedOrderDetails),
+      completedAt: new Date().toISOString(),
+      paymentStatus: 'SUCCESS'
+    });
+
     // Clean up the pending order
     pendingOrders.delete(orderId);
 
@@ -804,6 +813,184 @@ app.post('/payment/cashfree-success', async (req, res) => {
     console.error('Error processing Cashfree payment success:', error);
     res.status(500).json({
       success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET endpoint to retrieve order details by orderId
+app.get('/orders/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    console.log('Fetching order details for:', orderId);
+
+    // Check in processedOrders first (completed orders)
+    let orderData = processedOrders.get(orderId);
+    if (orderData) {
+      return res.json({
+        success: true,
+        order: {
+          orderId,
+          userDetails: orderData.userDetails,
+          orderDetails: orderData.orderDetails,
+          restaurantName: orderData.restaurantName,
+          amount: orderData.amount,
+          completedAt: orderData.completedAt,
+          paymentStatus: orderData.paymentStatus
+        }
+      });
+    }
+
+    // Check in pendingOrders (ongoing orders)
+    orderData = pendingOrders.get(orderId);
+    if (orderData) {
+      return res.json({
+        success: true,
+        order: {
+          orderId,
+          userDetails: orderData.userDetails,
+          orderDetails: orderData.orderDetails,
+          restaurantName: orderData.restaurantName,
+          amount: orderData.amount,
+          timestamp: orderData.timestamp,
+          paymentStatus: 'PENDING'
+        }
+      });
+    }
+
+    // Order not found
+    res.status(404).json({
+      success: false,
+      error: 'Order not found'
+    });
+
+  } catch (error) {
+    console.error('Error fetching order details:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Cashfree Webhook endpoint - this is what Cashfree will call
+app.post('/webhook/cashfree', async (req, res) => {
+  try {
+    console.log('Cashfree webhook received:', req.body);
+    
+    const { 
+      orderId, 
+      orderAmount, 
+      paymentStatus, 
+      txStatus, 
+      referenceId,
+      txTime,
+      signature 
+    } = req.body;
+
+    // Verify webhook signature (if you have Cashfree secret key)
+    // You should implement signature verification for security
+
+    if (paymentStatus === 'SUCCESS' || txStatus === 'SUCCESS') {
+      // Retrieve stored order data
+      const orderData = pendingOrders.get(orderId);
+      if (orderData) {
+        console.log('Processing successful payment for order:', orderId);
+        
+        const { 
+          userDetails, 
+          orderDetails, 
+          vendorEmail, 
+          vendorPhone, 
+          restaurantId, 
+          restaurantName 
+        } = orderData;
+
+        // Process the order (send emails and notifications)
+        let modifiedOrderDetails = JSON.stringify(orderDetails);
+        
+        // Pizza Bite specific payment adjustment
+        if (restaurantId === '5') {
+          const parsedDetails = orderDetails;
+          const adjustedDonation = parsedDetails.dogDonation > 0 ? parsedDetails.dogDonation - 5 : 0;
+          parsedDetails.remainingPayment = 20 + adjustedDonation;
+          parsedDetails.convenienceFee = 0;
+          modifiedOrderDetails = JSON.stringify(parsedDetails);
+        }
+
+        // Process emails and notifications
+        const results = await processEmails(
+          userDetails.fullName, 
+          userDetails.email, 
+          JSON.parse(modifiedOrderDetails), 
+          orderId, 
+          vendorEmail, 
+          vendorPhone, 
+          restaurantId
+        );
+
+        // Mark order as processed
+        processedOrders.set(orderId, {
+          ...orderData,
+          paymentStatus: 'SUCCESS',
+          processedAt: new Date().toISOString(),
+          results
+        });
+
+        // Clean up the pending order
+        pendingOrders.delete(orderId);
+        
+        console.log('Order processed successfully:', orderId);
+      }
+    }
+
+    // Always respond with 200 to acknowledge webhook
+    res.status(200).json({ status: 'received' });
+
+  } catch (error) {
+    console.error('Error processing Cashfree webhook:', error);
+    res.status(200).json({ status: 'error', message: error.message });
+  }
+});
+
+// Endpoint to check if order has been processed (for frontend polling)
+app.get('/payment/order-status/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Check if order is processed
+    if (processedOrders.has(orderId)) {
+      const processedOrder = processedOrders.get(orderId);
+      return res.json({
+        status: 'SUCCESS',
+        processed: true,
+        orderId,
+        emailsSent: processedOrder.results?.emailsSent || 0,
+        emailErrors: processedOrder.results?.emailErrors || [],
+        missedCallStatus: processedOrder.results?.missedCallStatus
+      });
+    }
+    
+    // Check if order is still pending
+    if (pendingOrders.has(orderId)) {
+      return res.json({
+        status: 'PENDING',
+        processed: false,
+        orderId
+      });
+    }
+    
+    // Order not found
+    res.status(404).json({
+      status: 'NOT_FOUND',
+      orderId
+    });
+
+  } catch (error) {
+    console.error('Error checking order status:', error);
+    res.status(500).json({
+      status: 'ERROR',
       error: error.message
     });
   }

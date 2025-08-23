@@ -462,13 +462,14 @@ const sendAdminNotificationEmail = (name, email, orderDetails, orderId) => {
 };
 
 // Rest of your existing code remains unchanged
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET
-});
+// Razorpay is commented out since we're using Cashfree payment forms
+// const razorpay = new Razorpay({
+//   key_id: process.env.RAZORPAY_KEY_ID,
+//   key_secret: process.env.RAZORPAY_KEY_SECRET
+// });
 
-console.log('Razorpay Key ID:', process.env.RAZORPAY_KEY_ID);
-console.log('Razorpay Key Secret:', process.env.RAZORPAY_KEY_SECRET);
+// console.log('Razorpay Key ID:', process.env.RAZORPAY_KEY_ID);
+// console.log('Razorpay Key Secret:', process.env.RAZORPAY_KEY_SECRET);
 
 app.post('/payment/create-order', async (req, res) => {
   const { amount, currency = 'INR' } = req.body;
@@ -922,7 +923,7 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV,
     services: {
       email: contactEmail ? 'connected' : 'error',
-      razorpay: razorpay ? 'connected' : 'error'
+      payment: 'cashfree' // Using Cashfree payment forms
     }
   };
   console.log('Health status:', status);

@@ -9,48 +9,50 @@ const http = require("http");
 const twilio = require('twilio');
 const WebSocket = require('ws');
 const fs = require('fs');
+const mongoose = require('mongoose');
+const UserOrder = require('./models/userOrder');
 
 // Restaurant data for vendor contact lookup
 const restaurants = [
   {
     id: 1,
-    name: "Alpha Restaurant",
-    vendorEmail: "alpha.restaurant@gmail.com",
-    vendorPhone: "+91 98765 43210",
-    operatingHours: "11:00 AM - 11:00 PM",
-    category: "Multi-Cuisine"
+    name: "BABAJI_FOOD-POINT",
+    vendorEmail: "gulabsingh93732@gmail.com",
+    vendorPhone: "+919373290270",
+    operatingHours: "10:30 AM - 8:30 PM",
+    category: "Chinese, Indian"
   },
   {
     id: 2,
-    name: "Beta Cafe",
-    vendorEmail: "beta.cafe@gmail.com", 
-    vendorPhone: "+91 87654 32109",
-    operatingHours: "8:00 AM - 10:00 PM",
-    category: "Coffee & Snacks"
+    name: "HIMALAYAN_CAFE",
+    vendorEmail: "yogeshthakur03839@gmail.com", 
+    vendorPhone: "+918278803839",
+    operatingHours: "10:30 AM - 10:00 PM",
+    category: "Chinese, Indian"
   },
   {
     id: 3,
-    name: "Gamma Grill",
-    vendorEmail: "gamma.grill@gmail.com",
-    vendorPhone: "+91 76543 21098", 
-    operatingHours: "12:00 PM - 12:00 AM",
-    category: "Grilled Specialties"
+    name: "SONU_FOOD-POINT",
+    vendorEmail: "sunil62948@gmail.com",
+    vendorPhone: "+919882262948", 
+    operatingHours: "10:30 AM - 9:45 PM",
+    category: "Chinese, Indian"
   },
   {
     id: 4,
-    name: "Delta Diner",
-    vendorEmail: "delta.diner@gmail.com",
-    vendorPhone: "+91 65432 10987",
-    operatingHours: "7:00 AM - 11:00 PM", 
-    category: "American Diner"
+    name: "JEEVA_FOOD-POINT",
+    vendorEmail: "panchhithakur0@gmail.com",
+    vendorPhone: "+917018596320",
+    operatingHours: "10:30 AM - 9:45 PM", 
+    category: "Chinese, Indian"
   },
   {
     id: 5,
-    name: "Pi Restaurant",
-    vendorEmail: "pi.restaurant@gmail.com",
-    vendorPhone: "+91 54321 09876",
-    operatingHours: "10:00 AM - 10:00 PM",
-    category: "Italian Cuisine"
+    name: "PIZZA-BITE",
+    vendorEmail: "anshul3927@gmail.com",
+    vendorPhone: "+919625970000",
+    operatingHours: "11:00 AM - 9:45 PM",
+    category: "American"
   }
 ];
 
@@ -60,9 +62,19 @@ const getRestaurantById = (restaurantId) => {
   return restaurants.find(restaurant => restaurant.id === id) || {
     name: "Restaurant",
     vendorEmail: "suppfoodles@gmail.com", 
-    vendorPhone: "+91 98765 43210"
+    vendorPhone: "+919999999999"
   };
 };
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => {
+  console.log('✅ Connected to MongoDB');
+}).catch((err) => {
+  console.error('❌ MongoDB connection error:', err);
+});
 
 // Only watch .env file in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -1174,6 +1186,40 @@ app.get('/email-status/:orderId', async (req, res) => {
 
 // Add global email tracking
 const emailTracker = new Map();
+
+// API endpoint to save user order
+app.post('/api/save-order', async (req, res) => {
+  try {
+    const { email, name, hostel, phone, order } = req.body;
+    if (!email || !order) {
+      return res.status(400).json({ success: false, error: 'Missing email or order data' });
+    }
+    let user = await UserOrder.findOne({ email });
+    if (!user) {
+      // New user
+      user = new UserOrder({
+        email,
+        name,
+        hostel,
+        phone,
+        orders: [order],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      await user.save();
+      return res.json({ success: true, message: 'User created and order saved' });
+    } else {
+      // Existing user, add order
+      user.orders.push(order);
+      user.updatedAt = new Date();
+      await user.save();
+      return res.json({ success: true, message: 'Order added to existing user' });
+    }
+  } catch (err) {
+    console.error('❌ Error saving order:', err);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
 
 // Update processEmails function
 async function processEmails(name, email, orderDetails, orderId, vendorEmail, vendorPhone, restaurantId) {

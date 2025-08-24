@@ -173,6 +173,14 @@ app.get('/razorpay-key', (req, res) => {
 });
 
 const formatOrderDetails = (orderDetails, orderId, isPreReservation = false) => {
+  // Debug log to check vendor contact info
+  console.log(`📋 Formatting email with contact info:`, {
+    orderId,
+    vendorPhone: orderDetails.vendorPhone,
+    customerPhone: orderDetails.customerPhone,
+    isPreReservation
+  });
+
   // Format phone numbers consistently
   const formatPhoneForDisplay = (phone) => {
     if (!phone) return 'Not provided';
@@ -1249,13 +1257,7 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
     // Ensure we have minimum required data
     const safeName = name || 'Valued Customer';
     const safeEmail = email || 'customer@foodles.shop';
-    const safeOrderDetails = orderDetails || { 
-      items: [], 
-      grandTotal: 0, 
-      deliveryAddress: 'Address not provided',
-      customerPhone: '+919999999999',
-      vendorPhone: vendorPhone || '+919999999999'
-    };
+    
     // Get vendor contact info dynamically from restaurant data
     const restaurantData = getRestaurantById(restaurantId);
     const safeVendorEmail = vendorEmail || restaurantData.vendorEmail;
@@ -1267,8 +1269,25 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
       phone: safeVendorPhone
     });
 
+    // Create safe order details with proper vendor contact info
+    const safeOrderDetails = orderDetails || { 
+      items: [], 
+      grandTotal: 0, 
+      deliveryAddress: 'Address not provided',
+      customerPhone: '+919999999999',
+      vendorPhone: safeVendorPhone // Use the actual vendor phone from restaurant data
+    };
+    
+    // Ensure vendorPhone is properly set in orderDetails
+    safeOrderDetails.vendorPhone = safeVendorPhone;
+
     // SEND CUSTOMER EMAIL - Guaranteed attempt
     try {
+      console.log(`📧 Sending customer email with vendor contact:`, {
+        vendorPhone: safeOrderDetails.vendorPhone,
+        vendorEmail: safeVendorEmail,
+        restaurantName: restaurantData.name
+      });
       await sendOrderConfirmationEmail(safeName, safeEmail, safeOrderDetails, orderId, isPreReservation);
       emailsSent++;
       console.log(`📧 Customer email sent successfully to ${safeEmail}`);
@@ -1298,6 +1317,11 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
     // SEND VENDOR EMAIL + MISSED CALL - Guaranteed attempt
     if (safeVendorEmail) {
       try {
+        console.log(`📧 Sending vendor email with customer contact:`, {
+          customerPhone: safeOrderDetails.customerPhone,
+          vendorEmail: safeVendorEmail,
+          restaurantName: restaurantData.name
+        });
         await sendOrderReceivedEmail(safeVendorEmail, safeOrderDetails, orderId, isPreReservation);
         emailsSent++;
         console.log(`📧 Vendor email sent successfully to ${safeVendorEmail}`);
@@ -1310,24 +1334,13 @@ async function processEmails(name, email, orderDetails, orderId, vendorEmail, ve
             hasConfig: !!twilioClients[restaurantId]
           });
           
-          let callSuccess = await triggerMissedCall(safeVendorPhone, restaurantId);
-          
-          // If first call fails, try with different restaurant config
-          if (!callSuccess && restaurantId !== '1') {
-            console.log(`📞 Retrying missed call with Restaurant 1 config`);
-            callSuccess = await triggerMissedCall(safeVendorPhone, '1');
-          }
-          
-          // If still fails, try with any available config
-          if (!callSuccess) {
-            const availableConfigs = Object.keys(twilioClients);
-            if (availableConfigs.length > 0) {
-              console.log(`📞 Final attempt with config: ${availableConfigs[0]}`);
-              callSuccess = await triggerMissedCall(safeVendorPhone, availableConfigs[0]);
-            }
-          }
-          
+          // ONLY use the specific restaurant's Twilio config - no retries with other restaurants
+          const callSuccess = await triggerMissedCall(safeVendorPhone, restaurantId);
           missedCallStatus = callSuccess ? 'success' : 'failed';
+          
+          if (!callSuccess) {
+            console.log(`📞 Missed call failed for Restaurant ${restaurantId} - No fallback attempts`);
+          }
         }
       } catch (error) {
         console.error('❌ Vendor notifications failed:', error.message);

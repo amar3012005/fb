@@ -10,7 +10,7 @@ const twilio = require('twilio');
 const WebSocket = require('ws');
 const fs = require('fs');
 const mongoose = require('mongoose');
-const UserOrder = require('./models/userOrder');
+const UserOrder = require('./models/UserOrder');
 
 // Restaurant data for vendor contact lookup
 const restaurants = [
@@ -62,7 +62,7 @@ const getRestaurantById = (restaurantId) => {
   return restaurants.find(restaurant => restaurant.id === id) || {
     name: "Restaurant",
     vendorEmail: "suppfoodles@gmail.com", 
-    vendorPhone: "+919999999999"
+    vendorPhone: "+91 98765 43210"
   };
 };
 

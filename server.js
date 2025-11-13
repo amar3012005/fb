@@ -67,14 +67,20 @@ const getRestaurantById = (restaurantId) => {
 };
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => {
-  console.log('✅ Connected to MongoDB');
-}).catch((err) => {
-  console.error('❌ MongoDB connection error:', err);
-});
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  }).then(() => {
+    console.log('✅ Connected to MongoDB');
+  }).catch((err) => {
+    console.error('❌ MongoDB connection error:', err.message);
+    console.error('Please check your MONGO_URI environment variable');
+  });
+} else {
+  console.error('❌ MONGO_URI environment variable is not set!');
+  console.error('Please configure MONGO_URI in your Render environment variables');
+}
 
 // Only watch .env file in development mode
 if (process.env.NODE_ENV === 'development') {
@@ -1422,8 +1428,18 @@ app.get('/health', (req, res) => {
     timestamp: new Date(),
     environment: process.env.NODE_ENV,
     services: {
+      mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
       email: contactEmail ? 'connected' : 'error',
       payment: 'cashfree' // Using Cashfree payment forms
+    },
+    environment_variables: {
+      MONGO_URI: process.env.MONGO_URI ? 'set' : 'missing',
+      EMAIL_USER: process.env.EMAIL_USER ? 'set' : 'missing',
+      EMAIL_PASS: process.env.EMAIL_PASS ? 'set' : 'missing',
+      CASHFREE_FORM_20: process.env.CASHFREE_FORM_20 ? 'set' : 'missing',
+      CASHFREE_FORM_25: process.env.CASHFREE_FORM_25 ? 'set' : 'missing',
+      CASHFREE_FORM_45: process.env.CASHFREE_FORM_45 ? 'set' : 'missing',
+      CASHFREE_FORM_55: process.env.CASHFREE_FORM_55 ? 'set' : 'missing'
     }
   };
   console.log('Health status:', status);

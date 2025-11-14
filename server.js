@@ -156,6 +156,7 @@ app.use(cors({
     const allowedOrigins = [
       'https://foodles.shop',
       'https://www.foodles.shop',
+      'https://api.foodles.shop',
       'https://precious-cobbler-d60f77.netlify.app' // Netlify preview
     ];
 
@@ -3195,6 +3196,122 @@ app.post('/test-email', async (req, res) => {
       error: 'Failed to send test email',
       details: error.message,
       timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Add endpoint to trigger notifications for already verified orders (for order confirmation page)
+app.post('/payment/trigger-notifications', async (req, res) => {
+  try {
+    const { orderId, orderData } = req.body;
+
+    console.log(`📧 Triggering notifications for already verified order: ${orderId}`);
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Order ID is required'
+      });
+    }
+
+    // Check if order has already been processed
+    if (processedOrders.has(orderId)) {
+      console.log(`✅ Order ${orderId} already processed, returning cached result`);
+      const cachedResult = processedOrders.get(orderId);
+      return res.json({
+        success: true,
+        orderId,
+        emailsSent: cachedResult.results?.emailsSent || 0,
+        emailErrors: cachedResult.results?.emailErrors || [],
+        missedCallStatus: cachedResult.results?.missedCallStatus,
+        note: 'Order already processed'
+      });
+    }
+
+    // Check if order data is available
+    let orderToProcess = orderData || pendingOrders.get(orderId);
+
+    if (!orderToProcess) {
+      console.error(`❌ No order data found for triggering notifications: ${orderId}`);
+      return res.status(404).json({
+        success: false,
+        error: 'Order data not found'
+      });
+    }
+
+    const { 
+      userDetails, 
+      orderDetails, 
+      vendorEmail, 
+      vendorPhone, 
+      restaurantId, 
+      restaurantName 
+    } = orderToProcess;
+
+    // Normalize order details
+    const normalizedOrderDetails = {
+      ...orderDetails,
+      items: Array.isArray(orderDetails.items) ? orderDetails.items : [],
+      subtotal: parseFloat(orderDetails.subtotal) || 0,
+      deliveryFee: parseFloat(orderDetails.deliveryFee) || 0,
+      convenienceFee: parseFloat(orderDetails.convenienceFee) || 0,
+      dogDonation: parseFloat(orderDetails.dogDonation) || 0,
+      grandTotal: parseFloat(orderDetails.grandTotal) || 0,
+      remainingPayment: parseFloat(orderDetails.remainingPayment) || 0,
+      deliveryAddress: orderDetails.deliveryAddress || 'Address not provided',
+      customerPhone: orderDetails.customerPhone || userDetails.phoneNumber || '',
+      vendorPhone: vendorPhone || ''
+    };
+
+    // Apply Pizza Bite adjustment if needed
+    if (restaurantId === '5') {
+      const adjustedDonation = normalizedOrderDetails.dogDonation > 0 ? normalizedOrderDetails.dogDonation - 5 : 0;
+      normalizedOrderDetails.remainingPayment = 20 + adjustedDonation;
+      normalizedOrderDetails.convenienceFee = 0;
+      console.log(`🍕 Applied Pizza Bite pricing adjustment for notifications`);
+    }
+
+    // Process notifications
+    const results = await processEmails(
+      userDetails.fullName, 
+      userDetails.email, 
+      normalizedOrderDetails, 
+      orderId, 
+      vendorEmail, 
+      vendorPhone, 
+      restaurantId
+    );
+
+    // Mark as processed
+    processedOrders.set(orderId, {
+      ...orderToProcess,
+      orderDetails: normalizedOrderDetails,
+      completedAt: new Date().toISOString(),
+      paymentStatus: 'SUCCESS',
+      processedAt: Date.now(),
+      results
+    });
+
+    // Clean up pending order if it exists
+    if (pendingOrders.has(orderId)) {
+      pendingOrders.delete(orderId);
+    }
+
+    console.log(`✅ Notifications triggered successfully for order ${orderId} - Emails: ${results.emailsSent}, Call: ${results.missedCallStatus}`);
+
+    res.json({
+      success: true,
+      orderId,
+      emailsSent: results.emailsSent,
+      emailErrors: results.emailErrors,
+      missedCallStatus: results.missedCallStatus
+    });
+
+  } catch (error) {
+    console.error('❌ Error triggering notifications:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

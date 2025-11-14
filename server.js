@@ -922,18 +922,28 @@ app.post('/payment/razorpay/verify', async (req, res) => {
 
     console.log(`📧 Processing notifications for order: ${orderId}`);
 
-    // STEP 5: Process emails and notifications
-    const results = await processEmails(
-      userDetails.fullName, 
-      userDetails.email, 
-      normalizedOrderDetails, 
-      orderId, 
-      vendorEmail, 
-      vendorPhone, 
-      restaurantId
-    );
+    // STEP 5: Process emails and notifications (with error handling that doesn't fail payment)
+    try {
+      const results = await processEmails(
+        userDetails.fullName, 
+        userDetails.email, 
+        normalizedOrderDetails, 
+        orderId, 
+        vendorEmail, 
+        vendorPhone, 
+        restaurantId
+      );
 
-    // STEP 6: Mark as processed
+      console.log(`✅ Notifications processed: Emails: ${results.emailsSent}, Call: ${results.missedCallStatus}`);
+    } catch (notificationError) {
+      console.error(`❌ Notification processing failed for order ${orderId}:`, notificationError.message);
+      console.log(`⚠️ Payment verification successful but notifications failed - order will still be marked as complete`);
+      
+      // Don't fail the payment verification if notifications fail
+      // Just log the error and continue
+    }
+
+    // STEP 6: Mark as processed (regardless of notification success)
     processedOrders.set(orderId, {
       ...orderData,
       orderDetails: normalizedOrderDetails,
@@ -941,7 +951,7 @@ app.post('/payment/razorpay/verify', async (req, res) => {
       razorpayOrderId: razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,
       processedAt: Date.now(),
-      results
+      notificationAttempted: true // Mark that we tried to send notifications
     });
 
     // Clean up pending order
@@ -949,7 +959,7 @@ app.post('/payment/razorpay/verify', async (req, res) => {
       pendingOrders.delete(orderId);
     }
 
-    console.log(`✅ Order ${orderId} completed via Razorpay - Emails: ${results.emailsSent}, Call: ${results.missedCallStatus}`);
+    console.log(`✅ Order ${orderId} completed via Razorpay - Payment verified successfully`);
 
     res.json({
       success: true,
@@ -957,9 +967,7 @@ app.post('/payment/razorpay/verify', async (req, res) => {
       orderId,
       razorpayOrderId: razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,
-      emailsSent: results.emailsSent,
-      emailErrors: results.emailErrors,
-      missedCallStatus: results.missedCallStatus
+      note: 'Payment verified successfully'
     });
 
   } catch (error) {

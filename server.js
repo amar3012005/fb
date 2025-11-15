@@ -46,16 +46,8 @@ const logger = {
   }
 };
 const mongoose = require('mongoose');
-const axios = require('axios'); // For Cashfree API calls
+const axios = require('axios');
 const UserOrder = require('./models/UserOrder');
-
-// Cashfree Configuration (Comment 1: Payment Verification)
-const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
-const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
-const CASHFREE_API_VERSION = '2023-08-01';
-const CASHFREE_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://api.cashfree.com/pg' 
-  : 'https://sandbox.cashfree.com/pg';
 
 // Restaurant data for vendor contact lookup
 const restaurants = [
@@ -150,7 +142,7 @@ mongoose.connect(process.env.MONGO_URI, {
 }).then(() => {
   logger.logInfo('✅ Connected to MongoDB');
 }).catch((err) => {
-  logError('mongodb_connection_error', 'MongoDB connection error', {
+  logger.logError('mongodb_connection_error', 'MongoDB connection error', {
     error: err.message
   });
 });
@@ -162,16 +154,16 @@ if (process.env.NODE_ENV === 'development') {
 if (fs.existsSync(envPath)) {
   fs.watch(envPath, (eventType, filename) => {
     if (eventType === 'change') {
-      logOrder('env_file_changed', '.env file changed, reloading configuration', {});
+      logger.logOrder('env_file_changed', '.env file changed, reloading configuration', {});
       require('dotenv').config({ override: true });
     }
   });
-  logOrder('env_file_watching', 'Watching .env file for changes in development mode', {});
+  logger.logOrder('env_file_watching', 'Watching .env file for changes in development mode', {});
 } else {
-  logOrder('env_file_not_found', 'No .env file found in development mode', {});
+  logger.logOrder('env_file_not_found', 'No .env file found in development mode', {});
 }
 } else {
-  logOrder('production_mode_no_env_watch', 'Production mode - not watching .env file', {});
+  logger.logOrder('production_mode_no_env_watch', 'Production mode - not watching .env file', {});
 }const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -205,7 +197,7 @@ app.use(cors({
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      logOrder('cors_blocked_origin', 'CORS blocked origin', {
+      logger.logOrder('cors_blocked_origin', 'CORS blocked origin', {
         origin,
         nodeEnv: process.env.NODE_ENV
       });
@@ -219,7 +211,7 @@ app.use(cors({
 
 // Add request logging middleware
 app.use((req, res, next) => {
-  logOrder('request_received', 'Request received', {
+  logger.logOrder('request_received', 'Request received', {
     origin: req.get('origin'),
     method: req.method,
     path: req.path,
@@ -279,7 +271,7 @@ const contactEmail = nodemailer.createTransport({
 // Add better error handling for email verification
 contactEmail.verify((error) => {
   if (error) {
-    logError('email_verification_failed', 'Email transport verification failed', {
+    logger.logError('email_verification_failed', 'Email transport verification failed', {
       error: error.message,
       code: error.code,
       host: process.env.EMAIL_HOST || 'smtp.gmail.com',
@@ -289,7 +281,7 @@ contactEmail.verify((error) => {
       timestamp: new Date().toISOString()
     });
   } else {
-    logOrder('email_service_ready', 'Email service ready', {
+    logger.logOrder('email_service_ready', 'Email service ready', {
       host: process.env.EMAIL_HOST || 'smtp.gmail.com',
       port: process.env.EMAIL_PORT || 587,
       user: process.env.EMAIL_USER ? 'configured' : 'missing',
@@ -319,7 +311,7 @@ const formatOrderDetails = (orderDetails, orderId, isPreReservation = false) => 
     };
 
     // Debug log to check vendor contact info
-    logOrder('email_formatting', 'Formatting email with contact info', {
+    logger.logOrder('email_formatting', 'Formatting email with contact info', {
       orderId,
       vendorPhone: safeOrderDetails.vendorPhone,
       customerPhone: safeOrderDetails.customerPhone,
@@ -634,7 +626,7 @@ const sendOrderConfirmationEmail = (name, email, orderDetails, orderId, isPreRes
         });
         reject(new Error("Email delivery failed"));
       } else {
-        logOrder('customer_email_delivered', 'Customer email delivered successfully', {
+        logger.logOrder('customer_email_delivered', 'Customer email delivered successfully', {
           email
         });
         resolve(true);
@@ -704,7 +696,7 @@ const sendOrderReceivedEmail = (vendorEmail, orderDetails, orderId, isPreReserva
         });
         reject(new Error("Vendor email delivery failed"));
       } else {
-        logOrder('vendor_email_delivered', 'Vendor email delivered successfully', {
+        logger.logOrder('vendor_email_delivered', 'Vendor email delivered successfully', {
           vendorEmail
         });
         resolve(true);
@@ -759,7 +751,7 @@ const sendAdminNotificationEmail = (name, email, orderDetails, orderId) => {
         });
         reject(error);
       } else {
-        logOrder('admin_notification_sent', 'Admin notification sent successfully', {});
+        logger.logOrder('admin_notification_sent', 'Admin notification sent successfully', {});
         resolve(true);
       }
     });
@@ -772,7 +764,7 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET
 });
 
-logOrder('razorpay_initialized', 'Razorpay initialized', {
+logger.logOrder('razorpay_initialized', 'Razorpay initialized', {
   keyId: process.env.RAZORPAY_KEY_ID?.substring(0, 10) + '...'
 });
 
@@ -803,7 +795,7 @@ app.post('/payment/razorpay/create-order', async (req, res) => {
       }
     };
 
-    logOrder('razorpay_order_creation', 'Creating Razorpay order', {
+    logger.logOrder('razorpay_order_creation', 'Creating Razorpay order', {
       orderId,
       amount: amount,
       customerName: userDetails.fullName
@@ -811,7 +803,7 @@ app.post('/payment/razorpay/create-order', async (req, res) => {
 
     const razorpayOrder = await razorpay.orders.create(options);
     
-    logOrder('razorpay_order_created', 'Razorpay order created successfully', {
+    logger.logOrder('razorpay_order_created', 'Razorpay order created successfully', {
       razorpayOrderId: razorpayOrder.id,
       orderId: orderId,
       amount: razorpayOrder.amount / 100
@@ -887,27 +879,6 @@ const validateRazorpayVerificationData = (data) => {
       razorpay_signature,
       orderId
     }
-  };
-};
-
-const validateCashfreeVerificationData = (data) => {
-  const errors = [];
-  const { orderId, paymentId } = data;
-
-  const orderIdValidation = validateOrderId(orderId);
-  if (!orderIdValidation.valid) {
-    errors.push(`Order ID validation failed: ${orderIdValidation.error}`);
-  }
-
-  // paymentId is optional for Cashfree
-  if (paymentId && typeof paymentId !== 'string') {
-    errors.push('paymentId must be a string if provided');
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    validatedData: { orderId, paymentId }
   };
 };
 
@@ -1090,7 +1061,7 @@ const validateOrderDataConsistency = (frontendData, serverData) => {
 
 // Fallback verification strategies when primary verification fails
 const attemptFallbackVerification = async (orderId, primaryError) => {
-  logOrder('fallback_verification_attempt', 'Attempting fallback verification strategies', {
+  logger.logOrder('fallback_verification_attempt', 'Attempting fallback verification strategies', {
     orderId,
     primaryError: primaryError?.message || 'unknown'
   });
@@ -1104,7 +1075,7 @@ const attemptFallbackVerification = async (orderId, primaryError) => {
   // STRATEGY 1: Check cached verification results
   const cachedVerification = verifiedPayments.get(orderId);
   if (cachedVerification && cachedVerification.status === 'SUCCESS') {
-    logOrder('fallback_cached_verification_success', 'Fallback successful using cached verification', {
+    logger.logOrder('fallback_cached_verification_success', 'Fallback successful using cached verification', {
       orderId,
       cachedAt: cachedVerification.timestamp
     });
@@ -1117,7 +1088,7 @@ const attemptFallbackVerification = async (orderId, primaryError) => {
   // STRATEGY 2: Check if order was processed successfully before
   const processedOrder = processedOrders.get(orderId);
   if (processedOrder && processedOrder.paymentStatus === 'SUCCESS') {
-    logOrder('fallback_processed_order_success', 'Fallback successful using processed order data', {
+    logger.logOrder('fallback_processed_order_success', 'Fallback successful using processed order data', {
       orderId,
       processedAt: processedOrder.completedAt
     });
@@ -1132,76 +1103,11 @@ const attemptFallbackVerification = async (orderId, primaryError) => {
     return results;
   }
 
-  // STRATEGY 3: Attempt minimal verification with different parameters
-  try {
-    logOrder('fallback_minimal_verification_attempt', 'Attempting minimal verification', {
-      orderId
-    });
-
-    // Try Cashfree verification without paymentId (order-level check)
-    const minimalVerification = await apiCallWithTimeoutAndRetry(async () => {
-      if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
-        return {
-          success: true,
-          status: 'SUCCESS',
-          paymentId: 'dev_fallback',
-          isDevelopmentMode: true
-        };
-      }
-
-      const headers = {
-        'x-api-version': CASHFREE_API_VERSION,
-        'x-client-id': CASHFREE_APP_ID,
-        'x-client-secret': CASHFREE_SECRET_KEY,
-        'Content-Type': 'application/json'
-      };
-
-      const orderUrl = `${CASHFREE_BASE_URL}/orders/${orderId}`;
-      const response = await axios.get(orderUrl, { headers });
-
-      return {
-        success: response.data.order_status === 'PAID',
-        status: response.data.order_status,
-        paymentId: response.data.cf_payment_id,
-        isDevelopmentMode: false
-      };
-    }, {
-      maxRetries: 2,
-      timeoutMs: 8000, // Shorter timeout for fallback
-      retryDelayMs: 1000
-    });
-
-    if (minimalVerification.success) {
-      logOrder('fallback_minimal_verification_success', 'Fallback successful with minimal verification', {
-        orderId,
-        status: minimalVerification.status
-      });
-      results.strategies.push('minimal_api_verification');
-      results.finalResult = {
-        status: 'SUCCESS',
-        paymentId: minimalVerification.paymentId,
-        verified: !minimalVerification.isDevelopmentMode,
-        source: 'minimal_fallback'
-      };
-      results.success = true;
-      return results;
-    }
-
-    results.strategies.push('minimal_api_verification_failed');
-
-  } catch (minimalError) {
-    logError('fallback_minimal_verification_failed', 'Minimal verification fallback failed', {
-      orderId,
-      error: minimalError.message
-    });
-    results.strategies.push('minimal_api_verification_error');
-  }
-
   // STRATEGY 4: Check for webhook confirmations (if any)
   // This would be populated by webhooks if they arrive after initial verification
   const webhookConfirmations = verifiedPayments.get(`${orderId}_webhook`);
   if (webhookConfirmations && webhookConfirmations.status === 'SUCCESS') {
-    logOrder('fallback_webhook_verification_success', 'Fallback successful using webhook confirmation', {
+    logger.logOrder('fallback_webhook_verification_success', 'Fallback successful using webhook confirmation', {
       orderId
     });
     results.strategies.push('webhook_confirmation');
@@ -1210,7 +1116,7 @@ const attemptFallbackVerification = async (orderId, primaryError) => {
     return results;
   }
 
-  logOrder('fallback_verification_all_failed', 'All fallback verification strategies failed', {
+  logger.logOrder('fallback_verification_all_failed', 'All fallback verification strategies failed', {
     orderId,
     strategiesAttempted: results.strategies
   });
@@ -1527,88 +1433,9 @@ app.post('/payment/razorpay/verify', async (req, res) => {
   }
 });
 
-// Cashfree webhook/response handler
-app.post('/cashfree-webhook', async (req, res) => {
-  try {
-    logOrder('cashfree_webhook_received', 'Cashfree webhook received', {
-      orderId: req.body.order_id,
-      type: req.body.type,
-      data: req.body.data
-    });
-    
-    // Extract order information from webhook
-    const { orderId, txStatus, paymentMode, txMsg, txTime, signature } = req.body;
-    
-    if (txStatus === 'SUCCESS') {
-      logOrder('cashfree_payment_success', 'Payment successful', {
-        orderId
-      });
-      
-      // Process the successful payment
-      const orderData = pendingOrders.get(orderId);
-      if (orderData) {
-        await processPaymentSuccess(orderId, orderData);
-      }
-    }
-    
-    res.status(200).json({ status: 'received' });
-  } catch (error) {
-    logError('cashfree_webhook_error', 'Cashfree webhook error', {
-      error: error.message
-    });
-    res.status(500).json({ error: 'Webhook processing failed' });
-  }
-});
 
-// Helper function to process successful payment
-async function processPaymentSuccess(orderId, orderData) {
-  try {
-    const { 
-      userDetails, 
-      orderDetails, 
-      vendorEmail, 
-      vendorPhone, 
-      restaurantId, 
-      restaurantName 
-    } = orderData;
 
-    // Process the order (send emails and notifications)
-    let modifiedOrderDetails = JSON.stringify(orderDetails);
-    
-    // Pizza Bite specific payment adjustment
-    if (restaurantId === '5') {
-      const parsedDetails = orderDetails;
-      const adjustedDonation = parsedDetails.dogDonation > 0 ? parsedDetails.dogDonation - 5 : 0;
-      parsedDetails.remainingPayment = 20 + adjustedDonation;
-      parsedDetails.convenienceFee = 0;
-      modifiedOrderDetails = JSON.stringify(parsedDetails);
-    }
 
-    const results = await processEmails(
-      userDetails.fullName, 
-      userDetails.email, 
-      JSON.parse(modifiedOrderDetails), 
-      orderId, 
-      vendorEmail, 
-      vendorPhone, 
-      restaurantId
-    );
-
-    // Clean up the pending order
-    pendingOrders.delete(orderId);
-
-    logOrder('cashfree_payment_processing_completed', 'Payment processing completed', {
-      orderId
-    });
-    return results;
-
-  } catch (error) {
-    logError('cashfree_payment_processing_error', 'Error processing payment success', {
-      error: error.message
-    });
-    throw error;
-  }
-}
 
 // Endpoint to get order details for confirmation page
 app.get('/order-details/:orderId', async (req, res) => {
@@ -1707,325 +1534,11 @@ const apiCallWithTimeoutAndRetry = async (apiCall, options = {}) => {
   throw lastError;
 };
 
-// Cashfree Payment Verification Function (Comment 1: Security Implementation)
-const verifyCashfreePayment = async (orderId, paymentId = null) => {
-  try {
-    logOrder('cashfree_verification_start', 'Verifying Cashfree payment', {
-      orderId,
-      paymentId
-    });
-    
-    // Check if Cashfree credentials are configured
-    if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
-      logOrder('cashfree_credentials_missing', 'Cashfree credentials not configured - DEVELOPMENT MODE', {
-        orderId,
-        paymentId
-      });
-      // In development, return mock success
-      return {
-        success: true,
-        status: 'SUCCESS',
-        paymentId: paymentId || 'dev_mock_payment',
-        raw: { mode: 'development', verified: false },
-        isDevelopmentMode: true
-      };
-    }
-    
-    // Prepare Cashfree API request
-    const headers = {
-      'x-api-version': CASHFREE_API_VERSION,
-      'x-client-id': CASHFREE_APP_ID,
-      'x-client-secret': CASHFREE_SECRET_KEY,
-      'Content-Type': 'application/json'
-    };
-    
-    // Enhanced API call with timeout and retry
-    const orderResponse = await apiCallWithTimeoutAndRetry(async () => {
-      const orderUrl = `${CASHFREE_BASE_URL}/orders/${orderId}`;
-      return axios.get(orderUrl, { headers });
-    }, {
-      maxRetries: 3,
-      timeoutMs: 15000, // 15 seconds for order fetch
-      retryDelayMs: 2000 // 2 seconds initial delay
-    });
-    
-    logOrder('cashfree_order_fetched', 'Cashfree order fetched successfully', {
-      orderId: orderResponse.data.order_id,
-      status: orderResponse.data.order_status,
-      amount: orderResponse.data.order_amount
-    });
-    
-    // If we have a paymentId, verify the specific payment with timeout and retry
-    if (paymentId) {
-      const paymentResponse = await apiCallWithTimeoutAndRetry(async () => {
-        const paymentUrl = `${CASHFREE_BASE_URL}/orders/${orderId}/payments/${paymentId}`;
-        return axios.get(paymentUrl, { headers });
-      }, {
-        maxRetries: 2,
-        timeoutMs: 10000, // 10 seconds for payment fetch
-        retryDelayMs: 1500 // 1.5 seconds initial delay
-      });
-      
-      logOrder('cashfree_payment_fetched', 'Cashfree payment fetched successfully', {
-        paymentId: paymentResponse.data.cf_payment_id,
-        status: paymentResponse.data.payment_status,
-        method: paymentResponse.data.payment_method
-      });
-      
-      // Verify payment is successful
-      const isSuccess = paymentResponse.data.payment_status === 'SUCCESS';
-      
-      return {
-        success: isSuccess,
-        status: paymentResponse.data.payment_status,
-        paymentId: paymentResponse.data.cf_payment_id,
-        raw: paymentResponse.data,
-        isDevelopmentMode: false
-      };
-    }
-    
-    // If no specific paymentId, check order status
-    const isSuccess = orderResponse.data.order_status === 'PAID';
-    
-    return {
-      success: isSuccess,
-      status: orderResponse.data.order_status,
-      paymentId: orderResponse.data.cf_payment_id || null,
-      raw: orderResponse.data,
-      isDevelopmentMode: false
-    };
-    
-  } catch (error) {
-    logError('cashfree_verification_failed', 'Cashfree verification failed', {
-      orderId,
-      paymentId,
-      error: error.response?.data || error.message,
-      isTimeout: error.message.includes('timeout'),
-      isNetworkError: !error.response
-    });
-    
-    return {
-      success: false,
-      status: 'VERIFICATION_FAILED',
-      error: error.response?.data || error.message,
-      raw: null,
-      isDevelopmentMode: false
-    };
-  }
-};
 
-// Cashfree Payment Endpoints
-// Store order data temporarily for processing after payment
-const pendingOrders = new Map();
-const processedOrders = new Map(); // Track completed orders
-const verifiedPayments = new Map(); // Track verified payment statuses (Comment 1)
 
-// Endpoint to prepare order data before redirecting to Cashfree
-app.post('/payment/prepare-order', async (req, res) => {
-  try {
-    const { 
-      orderId, 
-      userDetails, 
-      orderDetails, 
-      vendorEmail, 
-      vendorPhone, 
-      restaurantId, 
-      restaurantName, 
-      amount 
-    } = req.body;
 
-    logOrder('order_preparation_start', 'Preparing order for payment', {
-      orderId,
-      restaurantName,
-      customerName: userDetails.fullName
-    });
 
-    // Enhanced validation for required fields (Comment 7)
-    if (!orderId || !userDetails || !orderDetails) {
-      logError('order_preparation_validation_failed', 'Missing required order data', {
-        orderId: orderId || 'unknown',
-        missing: {
-          orderId: !orderId,
-          userDetails: !userDetails,
-          orderDetails: !orderDetails
-        }
-      });
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required order data',
-        missing: {
-          orderId: !orderId,
-          userDetails: !userDetails,
-          orderDetails: !orderDetails
-        }
-      });
-    }
 
-    // Validate and normalize orderDetails structure (Comment 7)
-    if (!Array.isArray(orderDetails.items) || orderDetails.items.length === 0) {
-      logError('order_validation_failed', 'Invalid or empty items array', {
-        orderId
-      });
-      return res.status(400).json({
-        success: false,
-        error: 'Order must contain at least one item',
-        orderId
-      });
-    }
-
-    // Validate numeric fields (Comment 7)
-    const numericFields = ['subtotal', 'deliveryFee', 'convenienceFee', 'dogDonation', 'grandTotal', 'remainingPayment'];
-    const invalidFields = [];
-    
-    numericFields.forEach(field => {
-      const value = orderDetails[field];
-      if (value !== undefined && value !== null) {
-        const parsed = parseFloat(value);
-        if (isNaN(parsed) || parsed < 0) {
-          invalidFields.push(field);
-        }
-      }
-    });
-
-    if (invalidFields.length > 0) {
-      logError('order_numeric_validation_failed', 'Invalid numeric fields in order', {
-        orderId,
-        invalidFields
-      });
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid numeric fields',
-        orderId,
-        invalidFields
-      });
-    }
-
-    logOrder('order_validation_success', 'Order validated successfully', {
-      orderId,
-      itemCount: orderDetails.items.length,
-      totalAmount: orderDetails.grandTotal
-    });
-
-    // Store order data temporarily with 30-minute expiration (Comment 7)
-    pendingOrders.set(orderId, {
-      userDetails,
-      orderDetails,
-      vendorEmail,
-      vendorPhone,
-      restaurantId,
-      restaurantName,
-      amount,
-      timestamp: Date.now()
-    });
-
-    // Clean up expired orders (older than 30 minutes) - increased from 1 hour (Comment 7)
-    setTimeout(() => {
-      if (pendingOrders.has(orderId)) {
-        logOrder('order_expired', 'Order expired after 30 minutes without completion', {
-          orderId
-        });
-        pendingOrders.delete(orderId);
-      }
-    }, 1800000); // 30 minutes
-
-    logOrder('order_prepared', 'Order prepared and stored for payment', {
-      orderId,
-      expiresIn: 1800
-    });
-
-    res.json({ 
-      success: true, 
-      message: 'Order prepared for payment',
-      orderId,
-      expiresIn: 1800 // seconds
-    });
-  } catch (error) {
-    logError('order_preparation_error', 'Error preparing order', {
-      error: error.message
-    });
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
-
-// Endpoint to verify payment directly with Cashfree (for order confirmation redirect)
-app.post('/payment/verify-cashfree', async (req, res) => {
-  try {
-    const { orderId, paymentId } = req.body;
-    
-    logOrder('cashfree_direct_verification_request', 'Direct Cashfree verification request', {
-      orderId,
-      paymentId
-    });
-    
-    // Enhanced input validation
-    const validation = validateCashfreeVerificationData(req.body);
-    if (!validation.valid) {
-      logError('cashfree_validation_failed', 'Cashfree verification data validation failed', {
-        errors: validation.errors,
-        orderId: req.body.orderId
-      });
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid request data',
-        validationErrors: validation.errors,
-        errorCode: 'VALIDATION_FAILED'
-      });
-    }
-    
-    // Verify payment with Cashfree API
-    const verification = await verifyCashfreePayment(orderId, paymentId);
-    
-    if (verification.success && (verification.status === 'SUCCESS' || verification.status === 'PAID')) {
-      logOrder('cashfree_direct_verification_success', 'Payment verified successfully', {
-        orderId
-      });
-      
-      // Store verified payment status
-      verifiedPayments.set(orderId, {
-        status: 'SUCCESS',
-        paymentId: verification.paymentId,
-        timestamp: Date.now(),
-        verified: !verification.isDevelopmentMode,
-        source: 'direct_verification'
-      });
-      
-      return res.json({
-        success: true,
-        orderId,
-        paymentStatus: 'SUCCESS',
-        paymentId: verification.paymentId,
-        verified: !verification.isDevelopmentMode
-      });
-    } else {
-      logOrder('cashfree_direct_verification_failed', 'Payment verification failed', {
-        orderId,
-        status: verification.status,
-        error: verification.error
-      });
-      
-      return res.json({
-        success: false,
-        orderId,
-        paymentStatus: verification.status || 'FAILED',
-        error: verification.error || 'Payment verification failed',
-        errorCode: verification.status === 'VERIFICATION_FAILED' ? 'VERIFICATION_ERROR' : 'PAYMENT_FAILED'
-      });
-    }
-    
-  } catch (error) {
-    logError('cashfree_direct_verification_error', 'Error in direct Cashfree verification', {
-      error: error.message
-    });
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      errorCode: 'INTERNAL_ERROR'
-    });
-  }
-});
 
 // Enhanced endpoint to get verified payment status (Comment 1: Step 3)
 app.get('/payment/status/:orderId', async (req, res) => {
@@ -2057,7 +1570,7 @@ app.get('/payment/status/:orderId', async (req, res) => {
     const isProcessed = processedOrders.has(orderId);
     
     if (isProcessed) {
-      logOrder('payment_status_processed_found', 'Order processed but not verified via Cashfree', {
+      logOrder('payment_status_processed_found', 'Order processed but not verified', {
         orderId
       });
       const processedData = processedOrders.get(orderId);
@@ -2068,7 +1581,7 @@ app.get('/payment/status/:orderId', async (req, res) => {
         verified: false,
         processed: true,
         processedAt: processedData.timestamp,
-        note: 'Payment processed but awaiting Cashfree verification'
+        note: 'Payment processed but awaiting verification'
       });
     }
     
@@ -2086,117 +1599,6 @@ app.get('/payment/status/:orderId', async (req, res) => {
         verified: false,
         processed: false
       });
-    }
-    
-    // FALLBACK: Attempt to verify with Cashfree API if order ID exists (Comment 1: Step 3)
-    logOrder('payment_status_fallback_verification', 'Order not found in memory, attempting Cashfree verification', {
-      orderId
-    });
-    
-    try {
-      const verification = await verifyCashfreePayment(orderId);
-      
-      if (verification.success) {
-        logOrder('payment_status_fallback_success', 'Cashfree verification successful', {
-          orderId
-        });
-        
-        // Cache the verified status
-        verifiedPayments.set(orderId, {
-          status: 'SUCCESS',
-          paymentId: verification.paymentId,
-          timestamp: Date.now(),
-          verified: !verification.isDevelopmentMode
-        });
-        
-        return res.json({
-          success: true,
-          orderId,
-          paymentStatus: 'SUCCESS',
-          paymentId: verification.paymentId,
-          verified: !verification.isDevelopmentMode,
-          verifiedAt: Date.now(),
-          source: 'cashfree_api'
-        });
-      }
-
-      // PRIMARY VERIFICATION FAILED - ATTEMPT FALLBACK STRATEGIES
-      logOrder('payment_status_primary_failed_attempting_fallback', 'Primary verification failed, attempting fallback strategies', {
-        orderId,
-        primaryError: verification.error
-      });
-
-      const fallbackResult = await attemptFallbackVerification(orderId, new Error(verification.error));
-
-      if (fallbackResult.success) {
-        logOrder('payment_status_fallback_success', 'Fallback verification successful', {
-          orderId,
-          strategies: fallbackResult.strategies,
-          source: fallbackResult.finalResult.source
-        });
-
-        // Cache the fallback result
-        verifiedPayments.set(orderId, {
-          ...fallbackResult.finalResult,
-          timestamp: Date.now(),
-          isFallback: true
-        });
-
-        return res.json({
-          success: true,
-          orderId,
-          paymentStatus: 'SUCCESS',
-          paymentId: fallbackResult.finalResult.paymentId,
-          verified: fallbackResult.finalResult.verified,
-          verifiedAt: Date.now(),
-          source: fallbackResult.finalResult.source,
-          fallbackUsed: true,
-          fallbackStrategies: fallbackResult.strategies
-        });
-      }
-
-      // ALL VERIFICATION STRATEGIES FAILED
-      logOrder('payment_status_all_verification_failed', 'All verification strategies failed', {
-        orderId,
-        primaryError: verification.error,
-        fallbackStrategies: fallbackResult.strategies
-      });
-
-    } catch (verificationError) {
-      logError('payment_status_verification_error', 'Error during verification process', {
-        orderId,
-        error: verificationError.message
-      });
-
-      // Even verification failed, try fallback strategies
-      try {
-        const fallbackResult = await attemptFallbackVerification(orderId, verificationError);
-
-        if (fallbackResult.success) {
-          logOrder('payment_status_error_fallback_success', 'Fallback verification successful after error', {
-            orderId,
-            strategies: fallbackResult.strategies
-          });
-
-          return res.json({
-            success: true,
-            orderId,
-            paymentStatus: 'SUCCESS',
-            paymentId: fallbackResult.finalResult.paymentId,
-            verified: false, // Not freshly verified
-            verifiedAt: Date.now(),
-            source: fallbackResult.finalResult.source,
-            fallbackUsed: true,
-            fallbackStrategies: fallbackResult.strategies,
-            note: 'Verification completed via fallback strategies'
-          });
-        }
-      } catch (fallbackError) {
-        logError('payment_status_fallback_also_failed', 'Fallback verification also failed', {
-          orderId,
-          fallbackError: fallbackError.message
-        });
-      }
     }
     
     // Order not found anywhere
@@ -2217,376 +1619,7 @@ app.get('/payment/status/:orderId', async (req, res) => {
   }
 });
 
-// Endpoint to handle Cashfree payment success callback (Comment 1: Step 2 - Real Verification)
-app.post('/payment/cashfree-success', async (req, res) => {
-  try {
-    const { 
-      orderId, 
-      paymentId,
-      orderData: frontendOrderData
-    } = req.body;
 
-    logOrder('cashfree_callback_received', 'Payment callback received', {
-      orderId,
-      paymentId,
-      hasOrderData: !!frontendOrderData
-    });
-
-    // Enhanced input validation
-    const validation = validateCashfreeVerificationData({ orderId, paymentId });
-    if (!validation.valid) {
-      logError('cashfree_callback_validation_failed', 'Cashfree callback data validation failed', {
-        errors: validation.errors,
-        orderId: req.body.orderId
-      });
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid request data',
-        validationErrors: validation.errors,
-        errorCode: 'VALIDATION_FAILED'
-      });
-    }
-
-    // STEP 1: Verify payment with Cashfree API (Comment 1: Step 2)
-    logOrder('cashfree_callback_verification_start', 'Initiating Cashfree payment verification', {
-      orderId
-    });
-    const cashfreeVerification = await verifyCashfreePayment(orderId, paymentId);
-    
-    if (!cashfreeVerification.success) {
-      logError('cashfree_callback_verification_failed', 'Cashfree payment verification failed', {
-        orderId,
-        status: cashfreeVerification.status,
-        error: cashfreeVerification.error
-      });
-      
-      global.emailStatus = global.emailStatus || {};
-      global.emailStatus[orderId] = {
-        emailsSent: 0,
-        emailErrors: ['Payment verification failed'],
-        status: 'payment_verification_failed',
-        timestamp: Date.now()
-      };
-      
-      return res.status(400).json({
-        success: false,
-        error: 'Payment verification failed',
-        orderId,
-        paymentId,
-        verificationStatus: cashfreeVerification.status,
-        verified: false,
-        errorCode: 'VERIFICATION_FAILED'
-      });
-    }
-    
-    // STEP 2: Verify status is terminal success (Comment 1: Step 2)
-    if (cashfreeVerification.status !== 'SUCCESS' && cashfreeVerification.status !== 'PAID') {
-      logOrder('cashfree_callback_status_not_success', 'Payment status not successful', {
-        orderId,
-        status: cashfreeVerification.status
-      });
-      
-      global.emailStatus = global.emailStatus || {};
-      global.emailStatus[orderId] = {
-        emailsSent: 0,
-        emailErrors: [`Payment status: ${cashfreeVerification.status}`],
-        status: 'payment_not_successful',
-        timestamp: Date.now()
-      };
-      
-      return res.status(400).json({
-        success: false,
-        error: 'Payment not successful',
-        orderId,
-        paymentId,
-        paymentStatus: cashfreeVerification.status,
-        verified: true,
-        errorCode: 'PAYMENT_NOT_SUCCESSFUL'
-      });
-    }
-
-    logOrder('cashfree_callback_payment_verified', 'Payment verified successfully', {
-      orderId,
-      paymentId: cashfreeVerification.paymentId,
-      status: cashfreeVerification.status,
-      isDevelopmentMode: cashfreeVerification.isDevelopmentMode
-    });
-    
-    // STEP 3: Store verified payment status (Comment 1: Step 2)
-    verifiedPayments.set(orderId, {
-      status: 'SUCCESS',
-      paymentId: cashfreeVerification.paymentId,
-      timestamp: Date.now(),
-      verified: !cashfreeVerification.isDevelopmentMode,
-      raw: cashfreeVerification.raw
-    });
-
-    logOrder('cashfree_callback_payment_stored', 'Payment verified and stored', {
-      orderId
-    });
-
-    // Initialize email status immediately on entry (Comment 6)
-    global.emailStatus = global.emailStatus || {};
-    global.emailStatus[orderId] = { 
-      emailsSent: 0, 
-      emailErrors: [], 
-      missedCallStatus: null,
-      timestamp: Date.now(),
-      status: 'processing'
-    };
-
-    // Validate payment status (Comment 4)
-    if (!paymentSuccess || (status && status !== 'SUCCESS')) {
-      logError('cashfree_payment_not_successful', 'Payment not successful for order', {
-        orderId,
-        paymentSuccess,
-        status
-      });
-      global.emailStatus[orderId].status = 'payment_failed';
-      global.emailStatus[orderId].error = 'Payment not successful';
-      
-      return res.status(400).json({
-        success: false,
-        error: 'Payment not successful',
-        orderId,
-        paymentId,
-        status: status || 'UNKNOWN'
-      });
-    }
-
-    // Check for idempotency - prevent processing the same order twice (Comment 4)
-    if (processedOrders.has(orderId)) {
-      logOrder('cashfree_order_already_processed', 'Order already processed, returning cached result', {
-        orderId
-      });
-      const cachedResult = processedOrders.get(orderId);
-      return res.json({
-        success: true,
-        orderId,
-        emailsSent: cachedResult.results?.emailsSent || 0,
-        emailErrors: cachedResult.results?.emailErrors || [],
-        missedCallStatus: cachedResult.results?.missedCallStatus,
-        dataSource: 'cached',
-        note: 'Order already processed'
-      });
-    }
-
-    // Try multiple sources for order data with localStorage priority
-    let orderData = null;
-    let dataSource = '';
-    let consistencyCheck = null;
-
-    // PRIORITY 1: Use frontend-provided order data (from localStorage)
-    if (frontendOrderData) {
-      orderData = frontendOrderData;
-      dataSource = 'frontend-localStorage';
-      logOrder('cashfree_using_frontend_data', 'Using order data from frontend localStorage', {
-        orderId
-      });
-
-      // Check consistency with server data if available
-      const serverData = pendingOrders.get(orderId);
-      if (serverData) {
-        consistencyCheck = validateOrderDataConsistency(frontendOrderData, serverData);
-        if (!consistencyCheck.consistent) {
-          logOrder('cashfree_data_consistency_warning', 'Order data inconsistency detected between frontend and server', {
-            orderId,
-            inconsistencies: consistencyCheck.inconsistencies,
-            severity: consistencyCheck.severity
-          });
-        }
-      }
-    }
-    
-    // PRIORITY 2: Fallback to server pendingOrders
-    if (!orderData) {
-      orderData = pendingOrders.get(orderId);
-      if (orderData) {
-        dataSource = 'server-memory';
-        logOrder('cashfree_using_server_data', 'Using order data from server memory', {
-          orderId
-        });
-      }
-    }
-
-    // PRIORITY 3: Ensure we have minimal required data to proceed
-    if (!orderData && orderId) {
-      logOrder('cashfree_no_order_data_proceeding', 'No order data found, but proceeding with orderId', {
-        orderId
-      });
-      global.emailStatus[orderId].status = 'missing_data';
-      global.emailStatus[orderId].error = 'No order data available';
-      
-      return res.status(404).json({
-        success: false,
-        error: 'Order data not found',
-        orderId,
-        note: 'Cannot process notifications without order data',
-        errorCode: 'ORDER_DATA_MISSING'
-      });
-    }
-
-    // Validate order data structure
-    const orderValidation = validateOrderDataStructure(orderData);
-    if (!orderValidation.valid) {
-      logError('cashfree_order_data_validation_failed', 'Order data structure validation failed', {
-        orderId,
-        errors: orderValidation.errors
-      });
-      global.emailStatus[orderId].status = 'incomplete_data';
-      global.emailStatus[orderId].error = 'Invalid order data structure';
-      
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid order data structure',
-        orderId,
-        validationErrors: orderValidation.errors,
-        errorCode: 'ORDER_DATA_INVALID'
-      });
-    }
-
-    const { 
-      userDetails, 
-      orderDetails, 
-      vendorEmail, 
-      vendorPhone, 
-      restaurantId, 
-      restaurantName 
-    } = orderValidation.validatedData;
-
-    logOrder('cashfree_processing_notifications', 'Processing notifications for order', {
-      orderId,
-      customerName: userDetails.fullName,
-      restaurantName,
-      dataSource
-    });
-
-    // Normalize orderDetails before processing (Comment 5)
-    const normalizedOrderDetails = {
-      ...orderDetails,
-      items: Array.isArray(orderDetails.items) ? orderDetails.items : [],
-      subtotal: parseFloat(orderDetails.subtotal) || 0,
-      deliveryFee: parseFloat(orderDetails.deliveryFee) || 0,
-      convenienceFee: parseFloat(orderDetails.convenienceFee) || 0,
-      dogDonation: parseFloat(orderDetails.dogDonation) || 0,
-      grandTotal: parseFloat(orderDetails.grandTotal) || 0,
-      remainingPayment: parseFloat(orderDetails.remainingPayment) || 0,
-      deliveryAddress: orderDetails.deliveryAddress || 'Address not provided',
-      customerPhone: orderDetails.customerPhone || userDetails.phoneNumber || '',
-      vendorPhone: vendorPhone || ''
-    };
-
-    let modifiedOrderDetails = normalizedOrderDetails;
-    
-    // Pizza Bite specific payment adjustment
-    if (restaurantId === '5') {
-      const adjustedDonation = modifiedOrderDetails.dogDonation > 0 ? modifiedOrderDetails.dogDonation - 5 : 0;
-      modifiedOrderDetails.remainingPayment = 20 + adjustedDonation;
-      modifiedOrderDetails.convenienceFee = 0;
-      logOrder('cashfree_pizza_bite_adjustment', 'Applied Pizza Bite pricing adjustment', {
-        orderId,
-        originalDonation: orderDetails.dogDonation,
-        adjustedDonation,
-        remainingPayment: modifiedOrderDetails.remainingPayment
-      });
-    }
-
-    let results;
-    try {
-      // GUARANTEED NOTIFICATION PROCESSING
-      results = await processEmails(
-        userDetails.fullName, 
-        userDetails.email, 
-        modifiedOrderDetails, 
-        orderId, 
-        vendorEmail, 
-        vendorPhone, 
-        restaurantId
-      );
-
-      // Update email status with success (Comment 6)
-      global.emailStatus[orderId] = {
-        ...global.emailStatus[orderId],
-        emailsSent: results.emailsSent,
-        emailErrors: results.emailErrors,
-        missedCallStatus: results.missedCallStatus,
-        status: 'completed',
-        completedAt: Date.now()
-      };
-    } catch (emailError) {
-      logError('email_processing_error', 'Email processing error', {
-        error: emailError.message,
-        orderId
-      });
-      
-      // Update email status with error (Comment 6)
-      global.emailStatus[orderId] = {
-        ...global.emailStatus[orderId],
-        status: 'failed',
-        error: emailError.message,
-        failedAt: Date.now()
-      };
-      
-      throw emailError;
-    }
-
-    // Store the completed order in processedOrders for future reference
-    processedOrders.set(orderId, {
-      ...orderData,
-      orderDetails: modifiedOrderDetails,
-      completedAt: new Date().toISOString(),
-      paymentStatus: 'SUCCESS',
-      paymentId,
-      dataSource,
-      results
-    });
-
-    // Clean up the pending order only if it exists
-    if (pendingOrders.has(orderId)) {
-      pendingOrders.delete(orderId);
-    }
-
-    logOrder('cashfree_order_completed', 'Order completed successfully', {
-      orderId,
-      emailsSent: results.emailsSent,
-      missedCallStatus: results.missedCallStatus,
-      dataSource
-    });
-
-    res.json({
-      success: true,
-      orderId,
-      emailsSent: results.emailsSent,
-      emailErrors: results.emailErrors,
-      missedCallStatus: results.missedCallStatus,
-      dataSource
-    });
-
-  } catch (error) {
-    logError('cashfree_payment_processing_error', 'Error processing Cashfree payment success', {
-      error: error.message,
-      orderId: req.body?.orderId
-    });
-    
-    const { orderId } = req.body;
-    
-    // Update email status with error in catch block (Comment 6)
-    if (orderId && global.emailStatus) {
-      global.emailStatus[orderId] = {
-        ...(global.emailStatus[orderId] || {}),
-        status: 'error',
-        error: error.message,
-        errorAt: Date.now()
-      };
-    }
-
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      orderId
-    });
-  }
-});
 
 // GET endpoint to retrieve order details by orderId
 app.get('/orders/:orderId', async (req, res) => {
@@ -2703,165 +1736,7 @@ app.get('/orders/history/:phone', async (req, res) => {
   }
 });
 
-// Cashfree Webhook endpoint - Idempotent processing (Comment 1: Step 4)
-app.post('/webhook/cashfree', async (req, res) => {
-  try {
-    logOrder('webhook_received', 'Cashfree webhook received', {
-      orderId: req.body.order_id,
-      type: req.body.type,
-      data: req.body.data
-    });
-    
-    const webhookData = req.body.data || req.body;
-    const orderId = webhookData.order_id || webhookData.orderId;
-    const paymentId = webhookData.payment_id || webhookData.cf_payment_id;
-    
-    if (!orderId) {
-      logError('webhook_missing_orderId', 'Webhook missing orderId', {});
-      return res.status(400).json({ status: 'error', message: 'Missing orderId' });
-    }
 
-    // STEP 1: Verify with Cashfree API (Comment 1: Step 4)
-    logOrder('webhook_verification_start', 'Verifying webhook payment', {
-      orderId
-    });
-    const verification = await verifyCashfreePayment(orderId, paymentId);
-    
-    if (!verification.success || (verification.status !== 'SUCCESS' && verification.status !== 'PAID')) {
-      logOrder('webhook_verification_failed', 'Webhook verification failed', {
-        orderId,
-        status: verification.status
-      });
-      return res.status(200).json({ status: 'received', verified: false });
-    }
-    
-    // STEP 2: Check idempotency (Comment 1: Step 4)
-    if (processedOrders.has(orderId)) {
-      logOrder('webhook_idempotent_check', 'Order already processed (idempotent check)', {
-        orderId
-      });
-      return res.status(200).json({ 
-        status: 'received', 
-        message: 'Already processed',
-        idempotent: true 
-      });
-    }
-    
-    // STEP 3: Mark payment as verified (Comment 1: Step 4)
-    verifiedPayments.set(orderId, {
-      status: 'SUCCESS',
-      paymentId: verification.paymentId,
-      timestamp: Date.now(),
-      verified: !verification.isDevelopmentMode,
-      source: 'webhook',
-      raw: verification.raw
-    });
-    
-    logOrder('webhook_payment_verified', 'Webhook verified payment', {
-      orderId
-    });
-    
-    // STEP 4: Process order if we have data (Comment 1: Step 4)
-    const orderData = pendingOrders.get(orderId);
-    
-    if (orderData) {
-      logOrder('webhook_processing_order', 'Processing order from webhook', {
-        orderId
-      });
-      
-      const { 
-        userDetails, 
-        orderDetails, 
-        vendorEmail, 
-        vendorPhone, 
-        restaurantId, 
-        restaurantName 
-      } = orderData;
-
-      // Normalize orderDetails
-      const normalizedOrderDetails = {
-        ...orderDetails,
-        items: Array.isArray(orderDetails.items) ? orderDetails.items : [],
-        subtotal: parseFloat(orderDetails.subtotal) || 0,
-        deliveryFee: parseFloat(orderDetails.deliveryFee) || 0,
-        convenienceFee: parseFloat(orderDetails.convenienceFee) || 0,
-        dogDonation: parseFloat(orderDetails.dogDonation) || 0,
-        grandTotal: parseFloat(orderDetails.grandTotal) || 0,
-        remainingPayment: parseFloat(orderDetails.remainingPayment) || 0,
-        deliveryAddress: orderDetails.deliveryAddress || 'Address not provided',
-        customerPhone: orderDetails.customerPhone || userDetails.phoneNumber || '',
-        vendorPhone: vendorPhone || ''
-      };
-      
-      let modifiedOrderDetails = normalizedOrderDetails;
-      
-      // Pizza Bite specific payment adjustment
-      if (restaurantId === '5') {
-        const adjustedDonation = modifiedOrderDetails.dogDonation > 0 ? modifiedOrderDetails.dogDonation - 5 : 0;
-        modifiedOrderDetails.remainingPayment = 20 + adjustedDonation;
-        modifiedOrderDetails.convenienceFee = 0;
-        logOrder('webhook_pizza_bite_adjustment', 'Applied Pizza Bite pricing adjustment in webhook', {
-          orderId,
-          originalDonation: orderDetails.dogDonation,
-          adjustedDonation,
-          remainingPayment: modifiedOrderDetails.remainingPayment
-        });
-      }
-
-      // Process emails and notifications
-      try {
-        const results = await processEmails(
-          userDetails.fullName, 
-          userDetails.email, 
-          modifiedOrderDetails, 
-          orderId, 
-          vendorEmail, 
-          vendorPhone, 
-          restaurantId
-        );
-
-        // Mark order as processed (Comment 1: Step 4 - Idempotency)
-        processedOrders.set(orderId, {
-          ...orderData,
-          paymentStatus: 'SUCCESS',
-          processedAt: Date.now(),
-          results,
-          source: 'webhook'
-        });
-
-        // Clean up the pending order
-        pendingOrders.delete(orderId);
-        
-        logOrder('webhook_processed_successfully', 'Webhook processed order successfully', {
-          orderId
-        });
-      } catch (emailError) {
-        logError('webhook_email_processing_failed', 'Webhook email processing failed', {
-          orderId,
-          error: emailError.message
-        });
-      }
-    } else {
-      logOrder('webhook_no_order_data', 'Webhook verified payment but no order data found', {
-        orderId
-      });
-    }
-
-    // Always respond with 200 to acknowledge webhook (Comment 1: Step 4)
-    res.status(200).json({ 
-      status: 'received',
-      orderId,
-      verified: true,
-      processed: !!orderData
-    });
-
-  } catch (error) {
-    logError('webhook_processing_error', 'Error processing Cashfree webhook', {
-      error: error.message
-    });
-    res.status(200).json({ status: 'error', message: error.message });
-  }
-});
 
 // Endpoint to check if order has been processed (for frontend polling)
 app.get('/payment/order-status/:orderId', async (req, res) => {
@@ -3326,7 +2201,7 @@ app.get('/health', async (req, res) => {
 });// Initialize single Twilio client for all missed calls
 let twilioClient = null;
 
-logOrder('twilio_credentials_check', 'Checking Twilio credentials', {
+logger.logOrder('twilio_credentials_check', 'Checking Twilio credentials', {
   hasAccountSid: !!process.env.TWILIO_ACCOUNT_SID,
   hasAuthToken: !!process.env.TWILIO_AUTH_TOKEN,
   hasPhoneNumber: !!process.env.TWILIO_PHONE_NUMBER,
@@ -3335,10 +2210,10 @@ logOrder('twilio_credentials_check', 'Checking Twilio credentials', {
 
 if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
   twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  logOrder('twilio_initialized', 'Twilio initialized for all missed calls', {});
+  logger.logOrder('twilio_initialized', 'Twilio initialized for all missed calls', {});
 } else {
-  logOrder('twilio_credentials_missing', 'Missing Twilio credentials - missed calls will be disabled', {});
-  logOrder('twilio_required_variables', 'Required environment variables status', {
+  logger.logOrder('twilio_credentials_missing', 'Missing Twilio credentials - missed calls will be disabled', {});
+  logger.logOrder('twilio_required_variables', 'Required environment variables status', {
     hasAccountSid: !!process.env.TWILIO_ACCOUNT_SID,
     hasAuthToken: !!process.env.TWILIO_AUTH_TOKEN,
     hasPhoneNumber: !!process.env.TWILIO_PHONE_NUMBER
@@ -3788,7 +2663,7 @@ const statusMonitor = {
     this.checkInterval = setInterval(() => {
       const changes = this.checkForChanges();
       if (changes.length > 0) {
-        logOrder('status_changes_detected', 'Status changes detected', {
+        logger.logOrder('status_changes_detected', 'Status changes detected', {
           changes
         });
         this.notifyWatchers(changes);
@@ -4066,71 +2941,7 @@ app.get('/orders/history/:phone', async (req, res) => {
   }
 });
 
-// Get appropriate payment form URL based on amount
-app.get('/api/payment-form/:amount', (req, res) => {
-  try {
-    const amount = parseInt(req.params.amount);
-    logOrder('payment_form_requested', 'Getting payment form for amount', {
-      amount
-    });
-    
-    // Check if we're running locally (development mode)
-    const isLocalDevelopment = req.get('host')?.includes('localhost') || 
-                               req.get('origin')?.includes('localhost') ||
-                               req.get('host')?.includes('127.0.0.1') ||
-                               process.env.NODE_ENV === 'development';
-    
-    let formUrl;
-    
-    if (amount <= 20) {
-      formUrl = isLocalDevelopment ? 
-        (process.env.CASHFREE_FORM_20_DEV || process.env.CASHFREE_FORM_20) : 
-        process.env.CASHFREE_FORM_20;
-    } else if (amount <= 25) {
-      formUrl = isLocalDevelopment ? 
-        (process.env.CASHFREE_FORM_25_DEV || process.env.CASHFREE_FORM_25) : 
-        process.env.CASHFREE_FORM_25;
-    } else if (amount <= 45) {
-      formUrl = isLocalDevelopment ? 
-        (process.env.CASHFREE_FORM_45_DEV || process.env.CASHFREE_FORM_45) : 
-        process.env.CASHFREE_FORM_45;
-    } else {
-      formUrl = isLocalDevelopment ? 
-        (process.env.CASHFREE_FORM_55_DEV || process.env.CASHFREE_FORM_55) : 
-        process.env.CASHFREE_FORM_55;
-    }
-    
-    if (!formUrl) {
-      logError('payment_form_not_configured', 'Payment form URL not configured for amount', {
-        amount
-      });
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Payment form not configured' 
-      });
-    }
-    
-    logOrder('payment_form_selected', 'Payment form selected', {
-      formUrl,
-      environment: isLocalDevelopment ? 'development' : 'production'
-    });
-    res.json({ 
-      success: true, 
-      paymentFormUrl: formUrl,
-      amount: amount,
-      environment: isLocalDevelopment ? 'development' : 'production'
-    });
-    
-  } catch (error) {
-    logError('payment_form_error', 'Error getting payment form URL', {
-      error: error.message
-    });
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
+
 
 // Add test endpoint for email functionality
 app.post('/test-email', async (req, res) => {
@@ -4366,12 +3177,12 @@ app.post('/payment/trigger-notifications', async (req, res) => {
 // Start the server
 server.listen(PORT, async () => {
   // BACKEND TRIGGER: Server startup phone number check
-  logOrder('server_startup_phone_check', 'BACKEND TRIGGER: Server startup - checking for stored phone numbers', {});
+  logger.logOrder('server_startup_phone_check', 'BACKEND TRIGGER: Server startup - checking for stored phone numbers', {});
 
   try {
     // Count total users with phone numbers
     const userCount = await UserOrder.countDocuments({ phone: { $exists: true, $ne: null } });
-    logOrder('server_startup_user_count', 'BACKEND: Found users with phone numbers in database', {
+    logger.logOrder('server_startup_user_count', 'BACKEND: Found users with phone numbers in database', {
       userCount
     });
 
@@ -4383,7 +3194,7 @@ server.listen(PORT, async () => {
     }).select('phone name updatedAt').limit(5);
 
     if (recentUsers.length > 0) {
-      logOrder('server_startup_recent_activity', 'BACKEND: Recent phone number activity', {
+      logger.logOrder('server_startup_recent_activity', 'BACKEND: Recent phone number activity', {
         recentUsers: recentUsers.map(user => ({
           phone: user.phone,
           name: user.name,
@@ -4392,9 +3203,9 @@ server.listen(PORT, async () => {
       });
     }
 
-    logOrder('server_startup_phone_check_completed', 'BACKEND TRIGGER: Phone number check completed', {});
+    logger.logOrder('server_startup_phone_check_completed', 'BACKEND TRIGGER: Phone number check completed', {});
   } catch (error) {
-    logOrder('server_startup_phone_check_failed', 'BACKEND: Phone number check failed', {
+    logger.logOrder('server_startup_phone_check_failed', 'BACKEND: Phone number check failed', {
       error: error.message
     });
   }
@@ -4402,7 +3213,7 @@ server.listen(PORT, async () => {
   // Get status of single Twilio configuration
   const twilioStatus = twilioClient ? '✓ Single client configured' : '✗ Not configured';
 
-  logOrder('server_started', 'Server started successfully', {
+  logger.logOrder('server_started', 'Server started successfully', {
     mode: process.env.NODE_ENV || 'development',
     port: PORT,
     allowedOrigins: [
@@ -4420,12 +3231,12 @@ server.listen(PORT, async () => {
 // Error handler for the server
 server.on('error', (error) => {
   if (error.code === 'EADDRINUSE') {
-    logError('server_port_in_use', `Port ${PORT} is already in use. Please kill any existing processes on port ${PORT} and try again.`, {
+    logger.logError('server_port_in_use', `Port ${PORT} is already in use. Please kill any existing processes on port ${PORT} and try again.`, {
       port: PORT
     });
     process.exit(1);
   } else {
-    logError('server_error', 'Server error', {
+    logger.logError('server_error', 'Server error', {
       error: error.message,
       code: error.code
     });

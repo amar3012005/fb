@@ -245,9 +245,7 @@ app.get('/health', (req, res) => {
 });
 
 const contactEmail = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.EMAIL_PORT) || 587,
-  secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
+  service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -256,16 +254,9 @@ const contactEmail = nodemailer.createTransport({
     rejectUnauthorized: false
   },
   pool: true, // Enable pooling for better performance
-  maxConnections: 5,
-  rateDelta: 1000,
-  rateLimit: 5,
-  // Connection timeout settings
-  connectionTimeout: 30000, // 30 seconds
-  greetingTimeout: 15000, // 15 seconds
-  socketTimeout: 30000, // 30 seconds
-  // Add debug logging
-  debug: process.env.NODE_ENV === 'development',
-  logger: process.env.NODE_ENV === 'development'
+  maxConnections: 10,
+  rateDelta: 1000, // Limit sending rate
+  rateLimit: 10 // Max emails per rateDelta
 });
 
 // Add better error handling for email verification
@@ -274,16 +265,12 @@ contactEmail.verify((error) => {
     logger.logError('email_verification_failed', 'Email transport verification failed', {
       error: error.message,
       code: error.code,
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-      port: process.env.EMAIL_PORT || 587,
       user: process.env.EMAIL_USER ? 'configured' : 'missing',
       hasPassword: !!process.env.EMAIL_PASS,
       timestamp: new Date().toISOString()
     });
   } else {
     logger.logOrder('email_service_ready', 'Email service ready', {
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-      port: process.env.EMAIL_PORT || 587,
       user: process.env.EMAIL_USER ? 'configured' : 'missing',
       timestamp: new Date().toISOString()
     });
